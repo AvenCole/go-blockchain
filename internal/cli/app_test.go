@@ -148,6 +148,15 @@ func TestRunShowScript(t *testing.T) {
 	if !strings.Contains(output, "scriptPubKey=OP_DUP OP_HASH160") {
 		t.Fatalf("showscript output = %q, want P2PKH script", output)
 	}
+	stdout.Reset()
+	stderr.Reset()
+
+	if code := app.Run([]string{"showscript", address, "p2pk"}); code != 0 {
+		t.Fatalf("showscript p2pk exit code = %d, stderr=%q", code, stderr.String())
+	}
+	if !strings.Contains(stdout.String(), "template=p2pk") || !strings.Contains(stdout.String(), "OP_CHECKSIG") {
+		t.Fatalf("showscript p2pk output = %q, want P2PK script", stdout.String())
+	}
 }
 
 func TestRunSendMineAndGetBalance(t *testing.T) {
@@ -228,6 +237,57 @@ func TestRunSendMineAndGetBalance(t *testing.T) {
 	}
 	if !strings.Contains(stdout.String(), "balance["+miner+"]=80") {
 		t.Fatalf("getbalance miner output = %q", stdout.String())
+	}
+}
+
+func TestRunSendP2PKAndMine(t *testing.T) {
+	cfg := config.Default()
+	cfg.DataDir = filepath.Join(t.TempDir(), "data")
+
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	app := NewApp(cfg, &stdout, &stderr)
+
+	if code := app.Run([]string{"createwallet"}); code != 0 {
+		t.Fatalf("createwallet miner exit code = %d, stderr=%q", code, stderr.String())
+	}
+	miner := strings.TrimPrefix(strings.TrimSpace(stdout.String()), "created wallet address=")
+	stdout.Reset()
+	stderr.Reset()
+
+	if code := app.Run([]string{"createwallet"}); code != 0 {
+		t.Fatalf("createwallet alice exit code = %d, stderr=%q", code, stderr.String())
+	}
+	alice := strings.TrimPrefix(strings.TrimSpace(stdout.String()), "created wallet address=")
+	stdout.Reset()
+	stderr.Reset()
+
+	if code := app.Run([]string{"createblockchain", miner}); code != 0 {
+		t.Fatalf("createblockchain exit code = %d, stderr=%q", code, stderr.String())
+	}
+	stdout.Reset()
+	stderr.Reset()
+
+	if code := app.Run([]string{"sendp2pk", miner, alice, "20", "1"}); code != 0 {
+		t.Fatalf("sendp2pk exit code = %d, stderr=%q", code, stderr.String())
+	}
+	if !strings.Contains(stdout.String(), "queued p2pk transaction") {
+		t.Fatalf("sendp2pk output = %q", stdout.String())
+	}
+	stdout.Reset()
+	stderr.Reset()
+
+	if code := app.Run([]string{"mine", miner}); code != 0 {
+		t.Fatalf("mine exit code = %d, stderr=%q", code, stderr.String())
+	}
+	stdout.Reset()
+	stderr.Reset()
+
+	if code := app.Run([]string{"printchain"}); code != 0 {
+		t.Fatalf("printchain exit code = %d, stderr=%q", code, stderr.String())
+	}
+	if !strings.Contains(stdout.String(), "ScriptPubKey: DATA[") || !strings.Contains(stdout.String(), "OP_CHECKSIG") {
+		t.Fatalf("printchain output = %q, want P2PK script", stdout.String())
 	}
 }
 

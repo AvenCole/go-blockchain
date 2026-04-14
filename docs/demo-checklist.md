@@ -31,6 +31,7 @@
 - [ ] `simreorg`
 - [ ] `showreorg`
 - [ ] `showevents`
+- [ ] `sendp2pk`
 - [ ] `runperf`
 
 ## 四、GUI 演示检查
@@ -49,6 +50,7 @@
 - [ ] 网络页能显示 orphan 数量
 - [ ] 最近链事件中能看到 genesis / main_block / fork_block / reorg
 - [ ] 网络页能显示节点最近网络事件
+- [ ] CLI 可演示 P2PK 脚本模板
 - [ ] 浅色/深色模式切换正常
 
 ## 五、网络演示检查

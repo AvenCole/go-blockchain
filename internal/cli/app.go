@@ -63,6 +63,8 @@ func (a App) Run(args []string) int {
 		return a.printChain(args[1:])
 	case "send":
 		return a.send(args[1:])
+	case "sendp2pk":
+		return a.sendP2PK(args[1:])
 	case "getbalance":
 		return a.getBalance(args[1:])
 	case "createwallet":
@@ -121,6 +123,7 @@ func (a App) printHelp() {
 	fmt.Fprintln(a.stdout, "  addblock <label>                    Append a debug coinbase-style block")
 	fmt.Fprintln(a.stdout, "  printchain                       Print the blockchain from tip to genesis")
 	fmt.Fprintln(a.stdout, "  send <from> <to> <amount> [fee]     Queue a signed transaction into the mempool")
+	fmt.Fprintln(a.stdout, "  sendp2pk <from> <to> <amount> [fee] Queue a transaction whose main output uses a P2PK script")
 	fmt.Fprintln(a.stdout, "  getbalance <address>                Show the current UTXO balance for one address")
 	fmt.Fprintln(a.stdout, "  createwallet                     Create a new wallet and save it")
 	fmt.Fprintln(a.stdout, "  listaddresses                    List all saved wallet addresses")
@@ -448,21 +451,114 @@ func (a App) reindexUTXO(args []string) int {
 }
 
 func (a App) showScript(args []string) int {
-	if len(args) != 1 {
-		fmt.Fprintln(a.stderr, "showscript requires: <address>")
+	if len(args) != 1 && len(args) != 2 {
+		fmt.Fprintln(a.stderr, "showscript requires: <address> [p2pkh|p2pk]")
 		return 1
 	}
 
-	pubKeyHash, err := wallet.PublicKeyHashFromAddress(args[0])
-	if err != nil {
-		fmt.Fprintf(a.stderr, "decode address: %v\n", err)
-		return 1
+	template := "p2pkh"
+	if len(args) == 2 {
+		template = strings.ToLower(args[1])
 	}
 
-	script := blockchain.NewP2PKHLockingScript(pubKeyHash)
 	fmt.Fprintf(a.stdout, "address=%s\n", args[0])
-	fmt.Fprintf(a.stdout, "pubKeyHash=%x\n", pubKeyHash)
-	fmt.Fprintf(a.stdout, "scriptPubKey=%s\n", script.String())
+	switch template {
+	case "p2pkh":
+		pubKeyHash, err := wallet.PublicKeyHashFromAddress(args[0])
+		if err != nil {
+			fmt.Fprintf(a.stderr, "decode address: %v\n", err)
+			return 1
+		}
+		script := blockchain.NewP2PKHLockingScript(pubKeyHash)
+		fmt.Fprintf(a.stdout, "template=p2pkh\n")
+		fmt.Fprintf(a.stdout, "pubKeyHash=%x\n", pubKeyHash)
+		fmt.Fprintf(a.stdout, "scriptPubKey=%s\n", script.String())
+		return 0
+	case "p2pk":
+		wallets, err := wallet.NewWallets(a.cfg.DataDir)
+		if err != nil {
+			fmt.Fprintf(a.stderr, "load wallets: %v\n", err)
+			return 1
+		}
+		toWallet, ok := wallets.GetWallet(args[0])
+		if !ok {
+			fmt.Fprintln(a.stderr, "p2pk requires the recipient wallet to exist locally")
+			return 1
+		}
+		script := blockchain.NewP2PKLockingScript(toWallet.PublicKey)
+		fmt.Fprintf(a.stdout, "template=p2pk\n")
+		fmt.Fprintf(a.stdout, "pubKey=%x\n", toWallet.PublicKey)
+		fmt.Fprintf(a.stdout, "scriptPubKey=%s\n", script.String())
+		return 0
+	default:
+		fmt.Fprintf(a.stderr, "unknown script template: %s\n", template)
+		return 1
+	}
+}
+
+func (a App) sendP2PK(args []string) int {
+	if len(args) != 3 && len(args) != 4 {
+		fmt.Fprintln(a.stderr, "sendp2pk requires: <from> <to> <amount> [fee]")
+		return 1
+	}
+	if !wallet.ValidateAddress(args[0]) || !wallet.ValidateAddress(args[1]) {
+		fmt.Fprintln(a.stderr, "sendp2pk requires valid from/to wallet addresses")
+		return 1
+	}
+
+	amount, err := strconv.Atoi(args[2])
+	if err != nil {
+		fmt.Fprintf(a.stderr, "parse amount: %v\n", err)
+		return 1
+	}
+	fee := 0
+	if len(args) == 4 {
+		fee, err = strconv.Atoi(args[3])
+		if err != nil {
+			fmt.Fprintf(a.stderr, "parse fee: %v\n", err)
+			return 1
+		}
+	}
+
+	chain, err := blockchain.OpenBlockchain(a.cfg.DataDir)
+	if err != nil {
+		if errors.Is(err, blockchain.ErrBlockchainNotInitialized) {
+			fmt.Fprintln(a.stderr, "blockchain not initialized; run createblockchain first")
+			return 1
+		}
+		fmt.Fprintf(a.stderr, "open blockchain: %v\n", err)
+		return 1
+	}
+	defer chain.Close()
+
+	wallets, err := wallet.NewWallets(a.cfg.DataDir)
+	if err != nil {
+		fmt.Fprintf(a.stderr, "load wallets: %v\n", err)
+		return 1
+	}
+
+	fromWallet, ok := wallets.GetWallet(args[0])
+	if !ok {
+		fmt.Fprintln(a.stderr, "sender wallet not found")
+		return 1
+	}
+	toWallet, ok := wallets.GetWallet(args[1])
+	if !ok {
+		fmt.Fprintln(a.stderr, "recipient wallet not found; p2pk requires a locally known wallet")
+		return 1
+	}
+
+	tx, err := blockchain.NewP2PKTransaction(fromWallet, toWallet, amount, fee, chain)
+	if err != nil {
+		fmt.Fprintf(a.stderr, "build p2pk transaction: %v\n", err)
+		return 1
+	}
+	if err := chain.AddToMempool(tx); err != nil {
+		fmt.Fprintf(a.stderr, "queue p2pk transaction: %v\n", err)
+		return 1
+	}
+
+	fmt.Fprintf(a.stdout, "queued p2pk transaction txid=%s fee=%d\n", tx.IDHex(), fee)
 	return 0
 }
 

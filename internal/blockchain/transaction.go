@@ -84,15 +84,31 @@ func NewCoinbaseTransactionWithReward(to, data string, reward int) Transaction {
 
 // NewUTXOTransaction creates a signed UTXO transaction from spendable outputs.
 func NewUTXOTransaction(fromWallet *wallet.Wallet, to string, amount int, fee int, bc *Blockchain) (Transaction, error) {
-	return buildUTXOTransaction(fromWallet, to, amount, fee, bc, txVersionScriptVM)
+	mainOutput, err := NewTXOutput(amount, to)
+	if err != nil {
+		return Transaction{}, err
+	}
+	return buildSpendTransaction(fromWallet, mainOutput, amount, fee, bc, txVersionScriptVM)
 }
 
-func buildUTXOTransaction(fromWallet *wallet.Wallet, to string, amount int, fee int, bc *Blockchain, version int) (Transaction, error) {
+// NewP2PKTransaction creates a script-VM transaction whose main output is a P2PK script.
+func NewP2PKTransaction(fromWallet *wallet.Wallet, toWallet *wallet.Wallet, amount int, fee int, bc *Blockchain) (Transaction, error) {
 	if fromWallet == nil {
 		return Transaction{}, fmt.Errorf("from wallet must not be nil")
 	}
-	if to == "" {
-		return Transaction{}, fmt.Errorf("to must not be empty")
+	if toWallet == nil {
+		return Transaction{}, fmt.Errorf("to wallet must not be nil")
+	}
+	mainOutput, err := NewP2PKOutput(amount, toWallet.PublicKey)
+	if err != nil {
+		return Transaction{}, err
+	}
+	return buildSpendTransaction(fromWallet, mainOutput, amount, fee, bc, txVersionScriptVM)
+}
+
+func buildSpendTransaction(fromWallet *wallet.Wallet, mainOutput TXOutput, amount int, fee int, bc *Blockchain, version int) (Transaction, error) {
+	if fromWallet == nil {
+		return Transaction{}, fmt.Errorf("from wallet must not be nil")
 	}
 	if amount <= 0 {
 		return Transaction{}, fmt.Errorf("amount must be positive")
@@ -138,10 +154,6 @@ func buildUTXOTransaction(fromWallet *wallet.Wallet, to string, amount int, fee 
 		}
 	}
 
-	mainOutput, err := NewTXOutput(amount, to)
-	if err != nil {
-		return Transaction{}, err
-	}
 	outputs := []TXOutput{mainOutput}
 	if accumulated > required {
 		changeOutput, err := NewTXOutput(accumulated-required, fromAddress)
@@ -176,6 +188,22 @@ func NewTXOutput(value int, address string) (TXOutput, error) {
 		Value:        value,
 		PubKeyHash:   pubKeyHash,
 		ScriptPubKey: NewP2PKHLockingScript(pubKeyHash),
+	}, nil
+}
+
+// NewP2PKOutput creates one output locked directly to a public key.
+func NewP2PKOutput(value int, pubKey []byte) (TXOutput, error) {
+	if value <= 0 {
+		return TXOutput{}, fmt.Errorf("value must be positive")
+	}
+	if len(pubKey) == 0 {
+		return TXOutput{}, fmt.Errorf("pubkey must not be empty")
+	}
+
+	return TXOutput{
+		Value:        value,
+		PubKeyHash:   wallet.HashPublicKey(pubKey),
+		ScriptPubKey: NewP2PKLockingScript(pubKey),
 	}, nil
 }
 
@@ -249,7 +277,13 @@ func (tx *Transaction) Sign(privKey ecdsa.PrivateKey, prevTXs map[string]Transac
 				pubKey = serializePublicKey(&privKey.PublicKey)
 				tx.Inputs[inID].PubKey = append([]byte(nil), pubKey...)
 			}
-			tx.Inputs[inID].ScriptSig = NewP2PKHUnlockingScript(signature, pubKey)
+			prevTx := prevTXs[tx.Inputs[inID].TxIDHex()]
+			prevOutput := prevTx.Outputs[tx.Inputs[inID].Out]
+			if _, ok := ExtractP2PKPubKey(prevOutput.EffectiveScriptPubKey()); ok {
+				tx.Inputs[inID].ScriptSig = NewP2PKUnlockingScript(signature)
+			} else {
+				tx.Inputs[inID].ScriptSig = NewP2PKHUnlockingScript(signature, pubKey)
+			}
 		}
 	}
 
@@ -446,6 +480,22 @@ func (tx Transaction) verifyInput(inID int, input TXInput, prevTXs map[string]Tr
 	if tx.UsesScriptVM() {
 		prevOutput := prevTx.Outputs[input.Out]
 		unlocking := input.EffectiveScriptSig()
+		locking := prevOutput.EffectiveScriptPubKey()
+
+		if pubKey, ok := ExtractP2PKPubKey(locking); ok {
+			signature, ok := ExtractP2PKSignature(unlocking)
+			if !ok {
+				return false
+			}
+			if len(input.Signature) > 0 && !bytes.Equal(input.Signature, signature) {
+				return false
+			}
+			if len(input.PubKey) > 0 && !bytes.Equal(input.PubKey, pubKey) {
+				return false
+			}
+			return VerifyScripts(unlocking, locking, tx.signatureHash(inID, prevTXs))
+		}
+
 		signature, pubKey, ok := ExtractP2PKHUnlockingData(unlocking)
 		if !ok {
 			return false
@@ -456,7 +506,7 @@ func (tx Transaction) verifyInput(inID int, input TXInput, prevTXs map[string]Tr
 		if len(input.PubKey) > 0 && !bytes.Equal(input.PubKey, pubKey) {
 			return false
 		}
-		return VerifyScripts(unlocking, prevOutput.EffectiveScriptPubKey(), tx.signatureHash(inID, prevTXs))
+		return VerifyScripts(unlocking, locking, tx.signatureHash(inID, prevTXs))
 	}
 
 	if !bytes.Equal(wallet.HashPublicKey(input.PubKey), prevTx.Outputs[input.Out].effectivePubKeyHash()) {
@@ -472,6 +522,9 @@ func (in TXInput) EffectiveScriptSig() Script {
 	}
 	if len(in.Signature) == 0 && len(in.PubKey) == 0 {
 		return Script{}
+	}
+	if len(in.Signature) > 0 && len(in.PubKey) == 0 {
+		return NewP2PKUnlockingScript(in.Signature)
 	}
 	return NewP2PKHUnlockingScript(in.Signature, in.PubKey)
 }
@@ -489,6 +542,9 @@ func (out TXOutput) EffectiveScriptPubKey() Script {
 func (out TXOutput) effectivePubKeyHash() []byte {
 	if len(out.PubKeyHash) > 0 {
 		return append([]byte(nil), out.PubKeyHash...)
+	}
+	if pubKey, ok := ExtractP2PKPubKey(out.EffectiveScriptPubKey()); ok {
+		return wallet.HashPublicKey(pubKey)
 	}
 	pubKeyHash, ok := ExtractP2PKHPubKeyHash(out.EffectiveScriptPubKey())
 	if !ok {

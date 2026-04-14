@@ -13,9 +13,9 @@ function BlocksPage({ blocks }: BlocksPageProps) {
       {blocks.map((block) => (
         <Card key={block.hash} variant="outlined">
           <CardContent>
-            <Stack direction="row" justifyContent="space-between" alignItems="center" flexWrap="wrap" gap={1}>
+            <Stack direction="row" spacing={1} sx={{ justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap' }}>
               <Typography variant="h6">区块 #{block.height}</Typography>
-              <Stack direction="row" spacing={1} flexWrap="wrap">
+              <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap' }}>
                 <Chip label={`Txs: ${block.transactionCount}`} color="primary" size="small" />
                 <Chip label={`Diff: ${block.difficulty}`} size="small" />
                 <Chip label={`Nonce: ${block.nonce}`} size="small" />
@@ -31,7 +31,7 @@ function BlocksPage({ blocks }: BlocksPageProps) {
               {block.transactions.map((tx) => (
                 <Accordion key={tx.id} disableGutters elevation={0}>
                   <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-                    <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap">
+                    <Stack direction="row" spacing={1} sx={{ alignItems: 'center', flexWrap: 'wrap' }}>
                       <Typography variant="subtitle2">TxID: {shortHash(tx.id, 14, 10)}</Typography>
                       <Chip size="small" label={`V${tx.version}`} />
                       <Chip size="small" label={`Fee: ${tx.fee}`} />

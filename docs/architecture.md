@@ -134,6 +134,11 @@ go-blockchain
 3. fork_block
 4. reorg
 
+当前 Script VM 已经支持的模板包括：
+
+1. P2PKH
+2. P2PK
+
 ## 7. GUI 模块
 
 GUI 使用：

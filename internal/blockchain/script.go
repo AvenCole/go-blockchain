@@ -59,11 +59,22 @@ func NewP2PKHLockingScript(pubKeyHash []byte) Script {
 	)
 }
 
+func NewP2PKLockingScript(pubKey []byte) Script {
+	return NewScript(
+		NewPushData(pubKey),
+		ScriptCommand{Opcode: OpCheckSig},
+	)
+}
+
 func NewP2PKHUnlockingScript(signature []byte, pubKey []byte) Script {
 	return NewScript(
 		NewPushData(signature),
 		NewPushData(pubKey),
 	)
+}
+
+func NewP2PKUnlockingScript(signature []byte) Script {
+	return NewScript(NewPushData(signature))
 }
 
 func NewCoinbaseScript(data string) Script {
@@ -136,6 +147,16 @@ func ExtractP2PKHPubKeyHash(script Script) ([]byte, bool) {
 	return append([]byte(nil), script.Commands[2].Data...), true
 }
 
+func ExtractP2PKPubKey(script Script) ([]byte, bool) {
+	if len(script.Commands) != 2 {
+		return nil, false
+	}
+	if script.Commands[0].Opcode != OpPushData || script.Commands[1].Opcode != OpCheckSig {
+		return nil, false
+	}
+	return append([]byte(nil), script.Commands[0].Data...), true
+}
+
 func ExtractP2PKHUnlockingData(script Script) ([]byte, []byte, bool) {
 	if len(script.Commands) != 2 {
 		return nil, nil, false
@@ -147,6 +168,16 @@ func ExtractP2PKHUnlockingData(script Script) ([]byte, []byte, bool) {
 	return append([]byte(nil), script.Commands[0].Data...),
 		append([]byte(nil), script.Commands[1].Data...),
 		true
+}
+
+func ExtractP2PKSignature(script Script) ([]byte, bool) {
+	if len(script.Commands) != 1 {
+		return nil, false
+	}
+	if script.Commands[0].Opcode != OpPushData {
+		return nil, false
+	}
+	return append([]byte(nil), script.Commands[0].Data...), true
 }
 
 func VerifyScripts(unlocking Script, locking Script, digest []byte) bool {

@@ -289,7 +289,11 @@ function App() {
                     : 'linear-gradient(135deg, rgba(59,130,246,0.10), rgba(16,185,129,0.10))',
               }}
             >
-              <Stack direction={{ xs: 'column', lg: 'row' }} spacing={2} justifyContent="space-between" alignItems={{ xs: 'flex-start', lg: 'center' }}>
+              <Stack
+                direction={{ xs: 'column', lg: 'row' }}
+                spacing={2}
+                sx={{ justifyContent: 'space-between', alignItems: { xs: 'flex-start', lg: 'center' } }}
+              >
                 <Stack spacing={1}>
                   <Typography variant="h5" sx={{ fontWeight: 700 }}>
                     区块链仿真系统桌面演示层
@@ -298,7 +302,7 @@ function App() {
                     当前 GUI 直接调用真实 Go 后端，适合课堂演示钱包生成、交易流转、出块、节点联通和命令行能力。
                   </Typography>
                 </Stack>
-                <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} flexWrap="wrap" useFlexGap>
+                <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} useFlexGap sx={{ flexWrap: 'wrap' }}>
                   <Chip label={`高度 ${dashboard?.height ?? '-'}`} color="primary" variant="outlined" />
                   <Chip label={`钱包 ${wallets.length}`} color="secondary" variant="outlined" />
                   <Chip label={`Mempool ${mempool.length}`} variant="outlined" />
@@ -416,7 +420,7 @@ function App() {
             </Box>
 
             <Paper variant="outlined" sx={{ p: 1.5 }}>
-              <Stack direction={{ xs: 'column', md: 'row' }} spacing={1.5} justifyContent="space-between">
+              <Stack direction={{ xs: 'column', md: 'row' }} spacing={1.5} sx={{ justifyContent: 'space-between' }}>
                 <Typography variant="body2" color="text.secondary">
                   最新区块：{latestBlock?.hash ?? '尚未初始化'}
                 </Typography>

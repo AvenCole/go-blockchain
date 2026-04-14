@@ -187,6 +187,21 @@ go run ./cmd/go-blockchain showevents 5
 2. 还包含 genesis、main_block、fork_block
 3. 这样老师能看到系统正常增长、分叉暂存和重组切换的完整链行为
 
+### 5.12 第二种脚本模板 P2PK
+
+建议命令：
+
+```bash
+go run ./cmd/go-blockchain showscript <address> p2pk
+go run ./cmd/go-blockchain sendp2pk <from> <to> 20 1
+```
+
+讲解重点：
+
+1. Script VM 不再只有 P2PKH 一种模板
+2. 现在还能直接演示 P2PK
+3. 说明脚本系统具备模板扩展能力
+
 ### 5.11 节点最近网络事件
 
 讲解重点：

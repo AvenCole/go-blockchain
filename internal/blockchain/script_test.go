@@ -70,9 +70,13 @@ func TestLegacyTransactionVerificationStillWorks(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = created.Close() })
 
-	legacyTx, err := buildUTXOTransaction(miner, alice.Address(), 20, 0, created, 0)
+	mainOutput, err := NewTXOutput(20, alice.Address())
 	if err != nil {
-		t.Fatalf("buildUTXOTransaction(legacy) error = %v", err)
+		t.Fatalf("NewTXOutput() error = %v", err)
+	}
+	legacyTx, err := buildSpendTransaction(miner, mainOutput, 20, 0, created, 0)
+	if err != nil {
+		t.Fatalf("buildSpendTransaction(legacy) error = %v", err)
 	}
 	if legacyTx.UsesScriptVM() {
 		t.Fatalf("legacyTx.UsesScriptVM() = true, want false")
@@ -106,5 +110,88 @@ func TestExtractP2PKHPubKeyHash(t *testing.T) {
 	}
 	if !bytes.Equal(got, pubKeyHash) {
 		t.Fatalf("ExtractP2PKHPubKeyHash() = %x, want %x", got, pubKeyHash)
+	}
+}
+
+func TestP2PKTransactionUsesScriptVM(t *testing.T) {
+	dataDir := filepath.Join(t.TempDir(), "data")
+	miner := mustNewWallet(t)
+	alice := mustNewWallet(t)
+
+	created, err := CreateBlockchain(dataDir, miner.Address())
+	if err != nil {
+		t.Fatalf("CreateBlockchain() error = %v", err)
+	}
+	t.Cleanup(func() { _ = created.Close() })
+
+	tx, err := NewP2PKTransaction(miner, alice, 20, 0, created)
+	if err != nil {
+		t.Fatalf("NewP2PKTransaction() error = %v", err)
+	}
+	if !tx.UsesScriptVM() {
+		t.Fatalf("tx.UsesScriptVM() = false, want true")
+	}
+	if _, ok := ExtractP2PKPubKey(tx.Outputs[0].EffectiveScriptPubKey()); !ok {
+		t.Fatalf("main output is not P2PK")
+	}
+	if !created.VerifyTransaction(tx) {
+		t.Fatalf("VerifyTransaction(tx) = false, want true")
+	}
+}
+
+func TestVerifyP2PKTransactionRejectsTamperedSignature(t *testing.T) {
+	dataDir := filepath.Join(t.TempDir(), "data")
+	miner := mustNewWallet(t)
+	alice := mustNewWallet(t)
+
+	created, err := CreateBlockchain(dataDir, miner.Address())
+	if err != nil {
+		t.Fatalf("CreateBlockchain() error = %v", err)
+	}
+	t.Cleanup(func() { _ = created.Close() })
+
+	tx, err := NewP2PKTransaction(miner, alice, 20, 0, created)
+	if err != nil {
+		t.Fatalf("NewP2PKTransaction() error = %v", err)
+	}
+
+	tampered := tx.Clone()
+	tampered.Inputs[0].ScriptSig.Commands[0].Data[0] ^= 0x01
+	if created.VerifyTransaction(tampered) {
+		t.Fatalf("VerifyTransaction(tampered p2pk) = true, want false")
+	}
+}
+
+func TestSpendingP2PKOutputUsesP2PKUnlockingScript(t *testing.T) {
+	dataDir := filepath.Join(t.TempDir(), "data")
+	miner := mustNewWallet(t)
+	alice := mustNewWallet(t)
+
+	created, err := CreateBlockchain(dataDir, miner.Address())
+	if err != nil {
+		t.Fatalf("CreateBlockchain() error = %v", err)
+	}
+	t.Cleanup(func() { _ = created.Close() })
+
+	firstTx, err := NewP2PKTransaction(miner, alice, 20, 0, created)
+	if err != nil {
+		t.Fatalf("NewP2PKTransaction() error = %v", err)
+	}
+	if err := created.AddToMempool(firstTx); err != nil {
+		t.Fatalf("AddToMempool(firstTx) error = %v", err)
+	}
+	if _, _, err := created.MineMempool(miner.Address()); err != nil {
+		t.Fatalf("MineMempool() error = %v", err)
+	}
+
+	secondTx, err := NewUTXOTransaction(alice, miner.Address(), 10, 0, created)
+	if err != nil {
+		t.Fatalf("NewUTXOTransaction() error = %v", err)
+	}
+	if _, ok := ExtractP2PKSignature(secondTx.Inputs[0].EffectiveScriptSig()); !ok {
+		t.Fatalf("alice unlocking script is not P2PK")
+	}
+	if !created.VerifyTransaction(secondTx) {
+		t.Fatalf("VerifyTransaction(secondTx) = false, want true")
 	}
 }

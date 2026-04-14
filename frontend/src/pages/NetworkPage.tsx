@@ -145,7 +145,11 @@ function NetworkPage({
 
       <Card variant="outlined">
         <CardContent>
-          <Stack direction={{ xs: 'column', md: 'row' }} spacing={1.5} justifyContent="space-between" alignItems={{ xs: 'flex-start', md: 'center' }}>
+          <Stack
+            direction={{ xs: 'column', md: 'row' }}
+            spacing={1.5}
+            sx={{ justifyContent: 'space-between', alignItems: { xs: 'flex-start', md: 'center' } }}
+          >
             <div>
               <Typography variant="h6">节点状态</Typography>
               <Typography color="text.secondary" sx={{ mt: 0.5 }}>
@@ -176,7 +180,7 @@ function NetworkPage({
                   <ListItemText
                     primary={`${node.address}  (height=${node.height})`}
                     secondary={
-                      <Stack spacing={0.75} sx={{ mt: 1 }}>
+                      <Stack spacing={0.75} sx={{ mt: 1, alignItems: 'flex-start' }}>
                         <Typography variant="body2">miner={node.minerAddress || '(none)'}</Typography>
                         <Typography variant="body2">running={String(node.running)}</Typography>
                         <Typography variant="body2">orphans={node.orphanCount}</Typography>
