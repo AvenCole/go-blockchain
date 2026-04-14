@@ -9,20 +9,20 @@ import (
 	"time"
 )
 
-// Block is the basic unit of the chain used in Plan 2.
+// Block is the basic unit of the chain used in Plan 3.
 type Block struct {
 	Timestamp     int64
-	Data          []byte
+	Transactions  []Transaction
 	PrevBlockHash []byte
 	Hash          []byte
 	Height        int
 }
 
-// NewBlock creates a new block from raw string data.
-func NewBlock(data string, prevBlockHash []byte, height int) *Block {
+// NewBlock creates a new block from transactions.
+func NewBlock(transactions []Transaction, prevBlockHash []byte, height int) *Block {
 	block := &Block{
 		Timestamp:     time.Now().Unix(),
-		Data:          []byte(data),
+		Transactions:  cloneTransactions(transactions),
 		PrevBlockHash: append([]byte(nil), prevBlockHash...),
 		Height:        height,
 	}
@@ -32,8 +32,8 @@ func NewBlock(data string, prevBlockHash []byte, height int) *Block {
 }
 
 // NewGenesisBlock creates the first block in the chain.
-func NewGenesisBlock(data string) *Block {
-	return NewBlock(data, nil, 0)
+func NewGenesisBlock(coinbase Transaction) *Block {
+	return NewBlock([]Transaction{coinbase}, nil, 0)
 }
 
 // CalculateHash derives the block hash from the current header fields.
@@ -41,7 +41,7 @@ func (b Block) CalculateHash() []byte {
 	headers := bytes.Join(
 		[][]byte{
 			[]byte(strconv.FormatInt(b.Timestamp, 10)),
-			b.Data,
+			b.transactionRoot(),
 			b.PrevBlockHash,
 			[]byte(strconv.Itoa(b.Height)),
 		},
@@ -84,4 +84,28 @@ func (b Block) HashHex() string {
 // PrevHashHex returns the previous hash in hex form for CLI display.
 func (b Block) PrevHashHex() string {
 	return hex.EncodeToString(b.PrevBlockHash)
+}
+
+func (b Block) transactionRoot() []byte {
+	if len(b.Transactions) == 0 {
+		return nil
+	}
+
+	var ids [][]byte
+	for _, tx := range b.Transactions {
+		ids = append(ids, tx.ID)
+	}
+
+	joined := bytes.Join(ids, []byte{})
+	sum := sha256.Sum256(joined)
+	return sum[:]
+}
+
+func cloneTransactions(transactions []Transaction) []Transaction {
+	cloned := make([]Transaction, len(transactions))
+	for i, tx := range transactions {
+		cloned[i] = tx.Clone()
+	}
+
+	return cloned
 }
