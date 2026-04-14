@@ -7,9 +7,10 @@ func (s *Service) Dashboard() (DashboardData, error) {
 	defer s.mu.Unlock()
 
 	data := DashboardData{
-		Height:      -1,
-		DataDir:     s.cfg.DataDir,
-		NetworkMode: s.cfg.NetworkMode,
+		Height:       -1,
+		DataDir:      s.cfg.DataDir,
+		NetworkMode:  s.cfg.NetworkMode,
+		RecentEvents: []ChainEventView{},
 	}
 
 	wallets, err := s.loadWallets()

@@ -186,12 +186,12 @@ function NetworkPage({
                         <Typography variant="body2">orphans={node.orphanCount}</Typography>
                         <Divider />
                         <Typography variant="body2">recent events:</Typography>
-                        {node.recentEvents.length === 0 ? (
+                        {(node.recentEvents ?? []).length === 0 ? (
                           <Typography variant="body2" color="text.secondary">
                             暂无网络事件
                           </Typography>
                         ) : (
-                          node.recentEvents.slice(0, 4).map((event, idx) => (
+                          (node.recentEvents ?? []).slice(0, 4).map((event, idx) => (
                             <Typography key={`${node.address}-event-${idx}`} variant="body2" color="text.secondary">
                               {event.timestamp} · {event.kind} · {event.detail}
                             </Typography>

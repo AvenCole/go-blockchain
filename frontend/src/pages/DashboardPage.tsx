@@ -10,6 +10,7 @@ type DashboardPageProps = {
 
 function DashboardPage({ dashboard, latestBlock }: DashboardPageProps) {
   if (!dashboard) return null
+  const recentEvents = dashboard.recentEvents ?? []
 
   return (
     <Box sx={{ display: 'grid', gap: 2, gridTemplateColumns: { xs: '1fr', md: 'repeat(4, 1fr)' } }}>
@@ -71,9 +72,9 @@ function DashboardPage({ dashboard, latestBlock }: DashboardPageProps) {
         <Card variant="outlined">
           <CardContent>
             <Typography variant="h6">最近链事件</Typography>
-            {dashboard.recentEvents.length > 0 ? (
+            {recentEvents.length > 0 ? (
               <Stack spacing={1.25} sx={{ mt: 2 }}>
-                {dashboard.recentEvents.map((event, index) => (
+                {recentEvents.map((event, index) => (
                   <Stack key={`${event.timestamp}-${index}`} spacing={0.4}>
                     <Typography>{event.timestamp} · {event.kind}</Typography>
                     <Typography color="text.secondary">{event.summary}</Typography>
