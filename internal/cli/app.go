@@ -124,7 +124,7 @@ func (a App) printDoctor() {
 	fmt.Fprintf(a.stdout, "log_level=%s\n", a.cfg.LogLevel)
 	fmt.Fprintf(a.stdout, "network_mode=%s\n", a.cfg.NetworkMode)
 	fmt.Fprintf(a.stdout, "chain_status=%s\n", chainStatus)
-	fmt.Fprintln(a.stdout, "next_step=implement merkle tree")
+	fmt.Fprintln(a.stdout, "next_step=implement proof of work")
 }
 
 func (a App) createBlockchain(args []string) int {
@@ -222,6 +222,7 @@ func (a App) printChain(args []string) int {
 		fmt.Fprintf(a.stdout, "Timestamp: %s\n", time.Unix(block.Timestamp, 0).UTC().Format(time.RFC3339))
 		fmt.Fprintf(a.stdout, "Hash: %s\n", block.HashHex())
 		fmt.Fprintf(a.stdout, "PrevHash: %s\n", block.PrevHashHex())
+		fmt.Fprintf(a.stdout, "MerkleRoot: %s\n", block.MerkleRootHex())
 		fmt.Fprintf(a.stdout, "Transactions: %d\n", len(block.Transactions))
 		for _, tx := range block.Transactions {
 			fmt.Fprintf(a.stdout, "  TxID: %s\n", tx.IDHex())

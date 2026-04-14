@@ -13,6 +13,7 @@ import (
 type Block struct {
 	Timestamp     int64
 	Transactions  []Transaction
+	MerkleRoot    []byte
 	PrevBlockHash []byte
 	Hash          []byte
 	Height        int
@@ -26,6 +27,7 @@ func NewBlock(transactions []Transaction, prevBlockHash []byte, height int) *Blo
 		PrevBlockHash: append([]byte(nil), prevBlockHash...),
 		Height:        height,
 	}
+	block.MerkleRoot = block.CalculateMerkleRoot()
 	block.Hash = block.CalculateHash()
 
 	return block
@@ -41,7 +43,7 @@ func (b Block) CalculateHash() []byte {
 	headers := bytes.Join(
 		[][]byte{
 			[]byte(strconv.FormatInt(b.Timestamp, 10)),
-			b.transactionRoot(),
+			b.MerkleRoot,
 			b.PrevBlockHash,
 			[]byte(strconv.Itoa(b.Height)),
 		},
@@ -86,19 +88,28 @@ func (b Block) PrevHashHex() string {
 	return hex.EncodeToString(b.PrevBlockHash)
 }
 
-func (b Block) transactionRoot() []byte {
+// MerkleRootHex returns the Merkle root in hex form for CLI display.
+func (b Block) MerkleRootHex() string {
+	return hex.EncodeToString(b.MerkleRoot)
+}
+
+// CalculateMerkleRoot derives the Merkle root from all transaction IDs.
+func (b Block) CalculateMerkleRoot() []byte {
 	if len(b.Transactions) == 0 {
 		return nil
 	}
 
 	var ids [][]byte
 	for _, tx := range b.Transactions {
-		ids = append(ids, tx.ID)
+		ids = append(ids, tx.Hash())
 	}
 
-	joined := bytes.Join(ids, []byte{})
-	sum := sha256.Sum256(joined)
-	return sum[:]
+	return NewMerkleTree(ids).Root()
+}
+
+// VerifyMerkleRoot recomputes the Merkle root to validate transaction integrity.
+func (b Block) VerifyMerkleRoot() bool {
+	return bytes.Equal(b.MerkleRoot, b.CalculateMerkleRoot())
 }
 
 func cloneTransactions(transactions []Transaction) []Transaction {

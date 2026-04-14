@@ -51,6 +51,7 @@
 5. `plan5.md`：UTXO 交易模型阶段计划
 6. `plan6.md`：交易签名与验证阶段计划
 7. `plan7.md`：UTXO 缓存与查询优化阶段计划
+8. `plan8.md`：Merkle 树阶段计划
 
 ## 后续维护规则
 
