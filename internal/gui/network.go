@@ -108,6 +108,7 @@ func (s *Service) Nodes() ([]NodeStatus, error) {
 			Peers:        session.node.KnownPeers(),
 			Height:       height,
 			Running:      true,
+			OrphanCount:  session.node.OrphanCount(),
 		})
 	}
 	sort.Slice(statuses, func(i, j int) bool {

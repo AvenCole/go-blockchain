@@ -249,6 +249,7 @@ export namespace gui {
 	    peers: string[];
 	    height: number;
 	    running: boolean;
+	    orphanCount: number;
 	
 	    static createFrom(source: any = {}) {
 	        return new NodeStatus(source);
@@ -261,6 +262,7 @@ export namespace gui {
 	        this.peers = source["peers"];
 	        this.height = source["height"];
 	        this.running = source["running"];
+	        this.orphanCount = source["orphanCount"];
 	    }
 	}
 	

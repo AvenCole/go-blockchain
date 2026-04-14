@@ -90,4 +90,5 @@ type NodeStatus struct {
 	Peers        []string `json:"peers"`
 	Height       int      `json:"height"`
 	Running      bool     `json:"running"`
+	OrphanCount  int      `json:"orphanCount"`
 }

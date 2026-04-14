@@ -110,6 +110,70 @@ func TestTransactionAndBlockBroadcast(t *testing.T) {
 	})
 }
 
+func TestNodeBuffersOrphanBlockUntilParentArrives(t *testing.T) {
+	dirA := filepath.Join(t.TempDir(), "nodeA")
+	dirB := filepath.Join(t.TempDir(), "nodeB")
+	miner := mustWallet(t)
+
+	chainA, err := blockchain.CreateBlockchain(dirA, miner.Address())
+	if err != nil {
+		t.Fatalf("CreateBlockchain(nodeA) error = %v", err)
+	}
+	defer chainA.Close()
+
+	block1, err := chainA.AddBlock([]blockchain.Transaction{
+		blockchain.NewCoinbaseTransaction(miner.Address(), "block-1"),
+	})
+	if err != nil {
+		t.Fatalf("AddBlock(block1) error = %v", err)
+	}
+	block2, err := chainA.AddBlock([]blockchain.Transaction{
+		blockchain.NewCoinbaseTransaction(miner.Address(), "block-2"),
+	})
+	if err != nil {
+		t.Fatalf("AddBlock(block2) error = %v", err)
+	}
+
+	blocks, err := chainA.Blocks()
+	if err != nil {
+		t.Fatalf("Blocks() error = %v", err)
+	}
+	genesis := blocks[len(blocks)-1]
+	if err := blockchain.ImportBlockToDir(dirB, genesis); err != nil {
+		t.Fatalf("ImportBlockToDir(genesis) error = %v", err)
+	}
+
+	nodeB := NewNode("127.0.0.1:0", dirB, "")
+	if err := nodeB.handleBlock(blockMessage{From: "peer", Block: *block2}); err != nil {
+		t.Fatalf("handleBlock(orphan child) error = %v", err)
+	}
+
+	if nodeB.OrphanCount() != 1 {
+		t.Fatalf("OrphanCount() = %d, want 1", nodeB.OrphanCount())
+	}
+	height, err := blockchain.BestHeight(dirB)
+	if err != nil {
+		t.Fatalf("BestHeight() error = %v", err)
+	}
+	if height != 0 {
+		t.Fatalf("height before parent = %d, want 0", height)
+	}
+
+	if err := nodeB.handleBlock(blockMessage{From: "peer", Block: *block1}); err != nil {
+		t.Fatalf("handleBlock(parent) error = %v", err)
+	}
+	if nodeB.OrphanCount() != 0 {
+		t.Fatalf("OrphanCount() after parent = %d, want 0", nodeB.OrphanCount())
+	}
+	height, err = blockchain.BestHeight(dirB)
+	if err != nil {
+		t.Fatalf("BestHeight() after parent error = %v", err)
+	}
+	if height != 2 {
+		t.Fatalf("height after parent = %d, want 2", height)
+	}
+}
+
 func freeAddress(t *testing.T) string {
 	t.Helper()
 

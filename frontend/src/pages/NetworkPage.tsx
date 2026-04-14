@@ -179,6 +179,7 @@ function NetworkPage({
                       <Stack spacing={0.75} sx={{ mt: 1 }}>
                         <Typography variant="body2">miner={node.minerAddress || '(none)'}</Typography>
                         <Typography variant="body2">running={String(node.running)}</Typography>
+                        <Typography variant="body2">orphans={node.orphanCount}</Typography>
                         <Divider />
                         <Typography variant="body2">peers:</Typography>
                         {node.peers.length === 0 ? (

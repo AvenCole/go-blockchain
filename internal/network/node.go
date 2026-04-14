@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/gob"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"net"
@@ -21,18 +22,22 @@ type Node struct {
 	DataDir      string
 	MinerAddress string
 
-	mu      sync.RWMutex
-	chainMu sync.Mutex
-	peers   map[string]struct{}
+	mu             sync.RWMutex
+	chainMu        sync.Mutex
+	peers          map[string]struct{}
+	orphanBlocks   map[string]blockchain.Block
+	orphanChildren map[string][]string
 }
 
 // NewNode creates a network node with one listening address and local chain path.
 func NewNode(address, dataDir, minerAddress string) *Node {
 	node := &Node{
-		Address:      address,
-		DataDir:      dataDir,
-		MinerAddress: minerAddress,
-		peers:        make(map[string]struct{}),
+		Address:        address,
+		DataDir:        dataDir,
+		MinerAddress:   minerAddress,
+		peers:          make(map[string]struct{}),
+		orphanBlocks:   make(map[string]blockchain.Block),
+		orphanChildren: make(map[string][]string),
 	}
 	node.addPeer(address)
 	return node
@@ -105,6 +110,13 @@ func (n *Node) KnownPeers() []string {
 	}
 	sort.Strings(peers)
 	return peers
+}
+
+// OrphanCount returns the number of buffered orphan blocks.
+func (n *Node) OrphanCount() int {
+	n.mu.RLock()
+	defer n.mu.RUnlock()
+	return len(n.orphanBlocks)
 }
 
 // SubmitTransaction creates one local transaction and broadcasts it.
@@ -244,8 +256,7 @@ func (n *Node) handleBlocks(msg blocksMessage) error {
 	defer n.chainMu.Unlock()
 
 	for _, block := range msg.Blocks {
-		blockCopy := block
-		if err := blockchain.ImportBlockToDir(n.DataDir, &blockCopy); err != nil && !errors.Is(err, blockchain.ErrInvalidBlock) && !errors.Is(err, blockchain.ErrDoubleSpend) && !errors.Is(err, blockchain.ErrInvalidTransaction) {
+		if err := n.importOrBufferBlock(msg.From, block); err != nil {
 			return err
 		}
 	}
@@ -280,11 +291,7 @@ func (n *Node) handleBlock(msg blockMessage) error {
 	n.chainMu.Lock()
 	defer n.chainMu.Unlock()
 
-	blockCopy := msg.Block
-	if err := blockchain.ImportBlockToDir(n.DataDir, &blockCopy); err != nil {
-		if errors.Is(err, blockchain.ErrInvalidBlock) || errors.Is(err, blockchain.ErrBlockchainNotInitialized) || errors.Is(err, blockchain.ErrDoubleSpend) || errors.Is(err, blockchain.ErrInvalidTransaction) {
-			return nil
-		}
+	if err := n.importOrBufferBlock(msg.From, msg.Block); err != nil {
 		return err
 	}
 
@@ -358,6 +365,112 @@ func (n *Node) addPeer(peer string) {
 	n.mu.Lock()
 	defer n.mu.Unlock()
 	n.peers[peer] = struct{}{}
+}
+
+func (n *Node) importOrBufferBlock(from string, block blockchain.Block) error {
+	blockCopy := block
+	if err := blockchain.ImportBlockToDir(n.DataDir, &blockCopy); err != nil {
+		switch {
+		case errors.Is(err, blockchain.ErrOrphanBlock):
+			n.bufferOrphan(block)
+			_ = n.requestMissingParent(from, block.Height)
+			return nil
+		case errors.Is(err, blockchain.ErrInvalidBlock),
+			errors.Is(err, blockchain.ErrBlockchainNotInitialized),
+			errors.Is(err, blockchain.ErrDoubleSpend),
+			errors.Is(err, blockchain.ErrInvalidTransaction):
+			return nil
+		default:
+			return err
+		}
+	}
+
+	n.processOrphanDescendants(from, block.Hash)
+	return nil
+}
+
+func (n *Node) requestMissingParent(peer string, orphanHeight int) error {
+	if peer == "" {
+		return nil
+	}
+	fromHeight := orphanHeight - 2
+	if fromHeight < -1 {
+		fromHeight = -1
+	}
+	return n.send(peer, "getblocks", getBlocksMessage{
+		From:       n.Address,
+		FromHeight: fromHeight,
+	})
+}
+
+func (n *Node) processOrphanDescendants(from string, parentHash []byte) {
+	queue := [][]byte{append([]byte(nil), parentHash...)}
+	for len(queue) > 0 {
+		hash := queue[0]
+		queue = queue[1:]
+
+		children := n.takeOrphansByParent(hash)
+		for _, orphan := range children {
+			orphanCopy := orphan
+			if err := blockchain.ImportBlockToDir(n.DataDir, &orphanCopy); err != nil {
+				if errors.Is(err, blockchain.ErrOrphanBlock) {
+					n.bufferOrphan(orphan)
+					_ = n.requestMissingParent(from, orphan.Height)
+				}
+				continue
+			}
+			queue = append(queue, append([]byte(nil), orphan.Hash...))
+		}
+	}
+}
+
+func (n *Node) bufferOrphan(block blockchain.Block) {
+	hashHex := block.HashHex()
+	prevHex := block.PrevHashHex()
+
+	n.mu.Lock()
+	defer n.mu.Unlock()
+	if _, exists := n.orphanBlocks[hashHex]; exists {
+		return
+	}
+	n.orphanBlocks[hashHex] = *cloneBlock(&block)
+	n.orphanChildren[prevHex] = append(n.orphanChildren[prevHex], hashHex)
+}
+
+func (n *Node) takeOrphansByParent(parentHash []byte) []blockchain.Block {
+	parentHex := hex.EncodeToString(parentHash)
+
+	n.mu.Lock()
+	defer n.mu.Unlock()
+
+	hashes := append([]string(nil), n.orphanChildren[parentHex]...)
+	delete(n.orphanChildren, parentHex)
+
+	orphans := make([]blockchain.Block, 0, len(hashes))
+	for _, hash := range hashes {
+		block, exists := n.orphanBlocks[hash]
+		if !exists {
+			continue
+		}
+		delete(n.orphanBlocks, hash)
+		orphans = append(orphans, block)
+	}
+	return orphans
+}
+
+func cloneBlock(block *blockchain.Block) *blockchain.Block {
+	if block == nil {
+		return nil
+	}
+	clone := *block
+	clone.PrevBlockHash = append([]byte(nil), block.PrevBlockHash...)
+	clone.Hash = append([]byte(nil), block.Hash...)
+	clone.MerkleRoot = append([]byte(nil), block.MerkleRoot...)
+	clone.Transactions = make([]blockchain.Transaction, len(block.Transactions))
+	for i, tx := range block.Transactions {
+		clone.Transactions[i] = tx.Clone()
+	}
+	return &clone
 }
 
 func encodePayload(v any) ([]byte, error) {

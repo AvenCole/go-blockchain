@@ -88,4 +88,5 @@ export type NodeStatus = {
   peers: string[]
   height: number
   running: boolean
+  orphanCount: number
 }
