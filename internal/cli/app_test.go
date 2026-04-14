@@ -2,6 +2,7 @@ package cli
 
 import (
 	"bytes"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -51,8 +52,42 @@ func TestRunDoctor(t *testing.T) {
 		t.Fatalf("Run(doctor) exit code = %d, want 0", code)
 	}
 
-	if !strings.Contains(stdout.String(), "initialization skeleton is ready") {
+	if !strings.Contains(stdout.String(), "blockchain skeleton is ready") {
 		t.Fatalf("doctor output missing readiness text: %q", stdout.String())
+	}
+}
+
+func TestCreateBlockchainAddBlockAndPrintChain(t *testing.T) {
+	cfg := config.Default()
+	cfg.DataDir = filepath.Join(t.TempDir(), "data")
+
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	app := NewApp(cfg, &stdout, &stderr)
+
+	if code := app.Run([]string{"createblockchain", "genesis"}); code != 0 {
+		t.Fatalf("createblockchain exit code = %d, stderr=%q", code, stderr.String())
+	}
+
+	stdout.Reset()
+	stderr.Reset()
+	if code := app.Run([]string{"addblock", "block-1"}); code != 0 {
+		t.Fatalf("addblock exit code = %d, stderr=%q", code, stderr.String())
+	}
+
+	stdout.Reset()
+	stderr.Reset()
+	if code := app.Run([]string{"printchain"}); code != 0 {
+		t.Fatalf("printchain exit code = %d, stderr=%q", code, stderr.String())
+	}
+
+	output := stdout.String()
+	if !strings.Contains(output, "Data: block-1") {
+		t.Fatalf("printchain output missing newest block: %q", output)
+	}
+
+	if !strings.Contains(output, "Data: genesis") {
+		t.Fatalf("printchain output missing genesis block: %q", output)
 	}
 }
 

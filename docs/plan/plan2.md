@@ -102,6 +102,15 @@ Plan 2 落地时，代码主要会进入这些位置：
 4. `data/`
    - 存放链数据
 
+本阶段实际实现时，建议优先落地：
+
+1. `internal/blockchain/block.go`
+2. `internal/blockchain/blockchain.go`
+3. `internal/blockchain/iterator.go`
+4. `internal/blockchain/blockchain_test.go`
+5. `internal/cli/app.go`
+6. `internal/cli/app_test.go`
+
 ## 六、推荐数据结构设计
 
 ### 1. `Block`
@@ -166,6 +175,12 @@ Plan 2 落地时，代码主要会进入这些位置：
 
 这一步一旦打通，后面链的追加和恢复都会稳定很多。
 
+当前这一阶段推荐直接采用现代 KV 存储 Pebble 做基础持久化，原因是：
+
+1. 它比老旧的 LevelDB 方案更现代，同时仍然保留区块链系统更适合的 KV 访问模式
+2. 后面做区块索引、UTXO、链恢复时都更自然
+3. 如果后续还需要报表、演示配置、实验记录，也可以额外用 SQLite 存储这些查询型信息
+
 ### 第五步：写追加新区块逻辑
 
 让系统支持把新数据打成新区块，挂到当前链尾后面。
@@ -200,6 +215,12 @@ Plan 2 落地时，代码主要会进入这些位置：
 2. `addblock`
 3. `printchain`
 
+在这一阶段完成后，这三个命令应该至少具备：
+
+1. `createblockchain`：创建创世区块并初始化数据库
+2. `addblock`：将输入数据写成新区块并挂到链尾
+3. `printchain`：从最新区块开始回溯并打印整条链
+
 这里不要求命令已经非常完善，但至少要让老师能看到：
 
 1. 你能初始化一条链
@@ -217,6 +238,10 @@ Plan 2 完成后，至少要满足：
 5. CLI 可以触发这些操作
 6. 测试覆盖关键结构和主流程
 7. 文档已经同步补齐
+
+推荐额外补一条可演示验收：
+
+1. 现场依次运行 `createblockchain`、`addblock`、`printchain`，能够看到链从创世区块发展为多区块结构
 
 ## 十、这一阶段的常见错误
 
