@@ -33,6 +33,8 @@ func (s *Service) ExecuteCLI(commandLine string) (CommandResult, error) {
 		return s.executeNodeSendFromConsole(args)
 	case "nodemine":
 		return s.executeNodeMineFromConsole(args)
+	case "runnetdemo":
+		return s.executeRunNetworkDemoFromConsole(args)
 	case "nodes":
 		return s.executeNodesFromConsole(args)
 	}
@@ -171,6 +173,33 @@ func (s *Service) executeNodeMineFromConsole(args []string) (CommandResult, erro
 	return CommandResult{
 		Command:  strings.Join(args, " "),
 		Stdout:   fmt.Sprintf("node mined block: %s\n", hash),
+		ExitCode: 0,
+	}, nil
+}
+
+func (s *Service) executeRunNetworkDemoFromConsole(args []string) (CommandResult, error) {
+	if len(args) != 1 {
+		return CommandResult{}, fmt.Errorf("runnetdemo does not accept extra arguments")
+	}
+
+	result, err := s.RunNetworkQuickDemo()
+	if err != nil {
+		return CommandResult{}, err
+	}
+
+	return CommandResult{
+		Command: strings.Join(args, " "),
+		Stdout: fmt.Sprintf(
+			"network demo ready\nsource=%s\npeer=%s\nminer=%s\nreceiver=%s\ntxid=%s\nblock=%s\npeerHeight=%d\ntipAnnounced=%t\n",
+			result.SourceNode,
+			result.PeerNode,
+			result.MinerAddress,
+			result.ReceiverAddress,
+			result.TxID,
+			result.BlockHash,
+			result.PeerHeight,
+			result.TipAnnounced,
+		),
 		ExitCode: 0,
 	}, nil
 }

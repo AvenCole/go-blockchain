@@ -265,6 +265,32 @@ export namespace gui {
 	        this.scriptPubKey = source["scriptPubKey"];
 	    }
 	}
+	export class NetworkDemoResult {
+	    sourceNode: string;
+	    peerNode: string;
+	    minerAddress: string;
+	    receiverAddress: string;
+	    txid: string;
+	    blockHash: string;
+	    peerHeight: number;
+	    tipAnnounced: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new NetworkDemoResult(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.sourceNode = source["sourceNode"];
+	        this.peerNode = source["peerNode"];
+	        this.minerAddress = source["minerAddress"];
+	        this.receiverAddress = source["receiverAddress"];
+	        this.txid = source["txid"];
+	        this.blockHash = source["blockHash"];
+	        this.peerHeight = source["peerHeight"];
+	        this.tipAnnounced = source["tipAnnounced"];
+	    }
+	}
 	export class NodeEventView {
 	    timestamp: string;
 	    kind: string;

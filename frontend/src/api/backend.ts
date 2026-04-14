@@ -17,9 +17,10 @@ import {
   StartNode,
   StopNode,
   SubmitNodeTransaction,
+  RunNetworkQuickDemo,
   Wallets,
 } from '../../wailsjs/go/main/App'
-import type { BlockView, CommandResult, DashboardData, MultiSigOutputView, NodeStatus, WalletView } from '../types'
+import type { BlockView, CommandResult, DashboardData, MultiSigOutputView, NetworkDemoResult, NodeStatus, WalletView } from '../types'
 
 export const fetchDashboard = (): Promise<DashboardData> => Dashboard()
 export const fetchWallets = (): Promise<WalletView[]> => Wallets()
@@ -62,3 +63,4 @@ export const submitNodeTransaction = (
   fee: number,
 ): Promise<string> => SubmitNodeTransaction(nodeAddress, from, to, amount, fee)
 export const mineNodePending = (address: string): Promise<string> => MineNodePending(address)
+export const runNetworkQuickDemo = (): Promise<NetworkDemoResult> => RunNetworkQuickDemo()

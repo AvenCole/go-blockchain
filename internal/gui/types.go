@@ -110,3 +110,14 @@ type NodeEventView struct {
 	Kind      string `json:"kind"`
 	Detail    string `json:"detail"`
 }
+
+type NetworkDemoResult struct {
+	SourceNode      string `json:"sourceNode"`
+	PeerNode        string `json:"peerNode"`
+	MinerAddress    string `json:"minerAddress"`
+	ReceiverAddress string `json:"receiverAddress"`
+	TxID            string `json:"txid"`
+	BlockHash       string `json:"blockHash"`
+	PeerHeight      int    `json:"peerHeight"`
+	TipAnnounced    bool   `json:"tipAnnounced"`
+}

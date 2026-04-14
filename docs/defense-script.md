@@ -265,6 +265,14 @@ go run ./cmd/go-blockchain spendmultisig <addr1,addr2> <source-txid> 0 <to> 10 1
 2. 可以指定一个节点直接发交易、直接挖矿
 3. GUI 控制台也支持 `nodeinit`、`nodesend`、`nodemine`，适合同时演示图形界面和终端链路
 
+### 5.14 一键网络演示
+
+讲解重点：
+
+1. GUI 现在可以一键拉起一个双节点同步场景
+2. 系统会自动完成钱包准备、节点启动、链初始化、交易广播和出块同步
+3. GUI 控制台中的 `runnetdemo` 可演示相同流程，方便快速答辩
+
 ### 6. GUI 演示
 
 直接打开桌面程序：

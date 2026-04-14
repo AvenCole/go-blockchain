@@ -12,11 +12,12 @@ import {
   TextField,
   Typography,
 } from '@mui/material'
-import type { ChainEventView, NodeStatus, ReorgStatusView, WalletView } from '../types'
+import type { ChainEventView, NetworkDemoResult, NodeStatus, ReorgStatusView, WalletView } from '../types'
 
 type NetworkPageProps = {
   nodes: NodeStatus[]
   wallets: WalletView[]
+  networkDemo?: NetworkDemoResult | null
   lastReorg?: ReorgStatusView | null
   recentEvents?: ChainEventView[]
   nodeForm: { address: string; seed: string; miner: string }
@@ -33,11 +34,13 @@ type NetworkPageProps = {
   onInitializeNodeBlockchain: () => Promise<void>
   onSubmitNodeTransaction: () => Promise<void>
   onMineNode: () => Promise<void>
+  onRunNetworkQuickDemo: () => Promise<void>
 }
 
 function NetworkPage({
   nodes,
   wallets,
+  networkDemo,
   lastReorg,
   recentEvents = [],
   nodeForm,
@@ -52,9 +55,35 @@ function NetworkPage({
   onInitializeNodeBlockchain,
   onSubmitNodeTransaction,
   onMineNode,
+  onRunNetworkQuickDemo,
 }: NetworkPageProps) {
   return (
     <Stack spacing={2.5}>
+      <Card variant="outlined">
+        <CardContent sx={{ p: 2 }}>
+          <Typography variant="h6">一键网络演示</Typography>
+          <Typography color="text.secondary" sx={{ mt: 1 }}>
+            自动创建双节点同步场景：准备钱包、启动两个节点、初始化主节点链、连接 peer、发送交易并挖矿。
+          </Typography>
+          <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} sx={{ mt: 2.5, alignItems: { md: 'center' } }}>
+            <Button variant="contained" color="primary" onClick={onRunNetworkQuickDemo}>
+              运行快速演示
+            </Button>
+            {networkDemo ? (
+              <Stack spacing={0.5}>
+                <Typography variant="body2">source={networkDemo.sourceNode}</Typography>
+                <Typography variant="body2">peer={networkDemo.peerNode} · peerHeight={networkDemo.peerHeight}</Typography>
+                <Typography variant="body2">tipAnnounced={String(networkDemo.tipAnnounced)}</Typography>
+              </Stack>
+            ) : (
+              <Typography variant="body2" color="text.secondary">
+                适合答辩时快速搭建“节点同步 + 交易广播 + 出块同步”演示链路。
+              </Typography>
+            )}
+          </Stack>
+        </CardContent>
+      </Card>
+
       <Card variant="outlined">
         <CardContent sx={{ p: 2 }}>
           <Typography variant="h6">链切换观测</Typography>

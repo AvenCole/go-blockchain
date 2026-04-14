@@ -108,3 +108,14 @@ export type NodeEventView = {
   kind: string
   detail: string
 }
+
+export type NetworkDemoResult = {
+  sourceNode: string
+  peerNode: string
+  minerAddress: string
+  receiverAddress: string
+  txid: string
+  blockHash: string
+  peerHeight: number
+  tipAnnounced: boolean
+}

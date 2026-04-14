@@ -53,11 +53,12 @@ import {
   queueP2PKTransaction,
   queueSpendMultiSigTransaction,
   queueTransaction,
+  runNetworkQuickDemo,
   startNode,
   stopNode,
   submitNodeTransaction,
 } from './api/backend'
-import type { BlockView, CommandResult, DashboardData, MultiSigOutputView, NodeStatus, WalletView } from './types'
+import type { BlockView, CommandResult, DashboardData, MultiSigOutputView, NetworkDemoResult, NodeStatus, WalletView } from './types'
 
 type NavItem = {
   label: string
@@ -86,6 +87,7 @@ function App() {
   const [nodes, setNodes] = useState<NodeStatus[]>([])
   const [message, setMessage] = useState('')
   const [error, setError] = useState('')
+  const [networkDemo, setNetworkDemo] = useState<NetworkDemoResult | null>(null)
   const [txForm, setTxForm] = useState({
     template: 'p2pkh' as 'p2pkh' | 'p2pk' | 'multisig',
     from: '',
@@ -399,6 +401,18 @@ function App() {
     }
   }
 
+  const handleRunNetworkQuickDemo = async () => {
+    try {
+      setError('')
+      const result = await runNetworkQuickDemo()
+      setNetworkDemo(result)
+      setMessage(`网络演示已完成：${result.sourceNode} -> ${result.peerNode}`)
+      await refresh()
+    } catch (err) {
+      setError(String(err))
+    }
+  }
+
   const handleSpendMultiSig = async () => {
     try {
       setError('')
@@ -570,6 +584,7 @@ function App() {
                     <NetworkPage
                       nodes={nodes}
                       wallets={wallets}
+                      networkDemo={networkDemo}
                       lastReorg={dashboard?.lastReorg ?? null}
                       recentEvents={dashboard?.recentEvents ?? []}
                       nodeForm={nodeForm}
@@ -584,6 +599,7 @@ function App() {
                       onInitializeNodeBlockchain={handleInitializeNodeBlockchain}
                       onSubmitNodeTransaction={handleSubmitNodeTransaction}
                       onMineNode={handleMineNode}
+                      onRunNetworkQuickDemo={handleRunNetworkQuickDemo}
                     />
                   </CardContent>
                 </Card>

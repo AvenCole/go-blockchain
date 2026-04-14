@@ -95,3 +95,7 @@ func (a *App) SubmitNodeTransaction(nodeAddress, from, to string, amount int, fe
 func (a *App) MineNodePending(address string) (string, error) {
 	return a.service.MineNodePending(address)
 }
+
+func (a *App) RunNetworkQuickDemo() (gui.NetworkDemoResult, error) {
+	return a.service.RunNetworkQuickDemo()
+}

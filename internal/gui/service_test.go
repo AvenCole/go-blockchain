@@ -370,3 +370,58 @@ func TestConsoleNodeCommands(t *testing.T) {
 		t.Fatalf("nodemine stdout = %q, want mined message", result.Stdout)
 	}
 }
+
+func TestRunNetworkQuickDemo(t *testing.T) {
+	t.Setenv(guiDataDirEnv, t.TempDir())
+
+	service := NewService()
+	result, err := service.RunNetworkQuickDemo()
+	if err != nil {
+		t.Fatalf("RunNetworkQuickDemo() error = %v", err)
+	}
+	t.Cleanup(func() {
+		_ = service.StopNode(result.SourceNode)
+		_ = service.StopNode(result.PeerNode)
+	})
+
+	if result.SourceNode == "" || result.PeerNode == "" {
+		t.Fatalf("RunNetworkQuickDemo() returned empty node addresses: %+v", result)
+	}
+	if result.TxID == "" || result.BlockHash == "" {
+		t.Fatalf("RunNetworkQuickDemo() returned empty tx or block: %+v", result)
+	}
+	if result.PeerHeight < 1 {
+		t.Fatalf("RunNetworkQuickDemo().PeerHeight = %d, want >= 1", result.PeerHeight)
+	}
+	if !result.TipAnnounced {
+		t.Fatalf("RunNetworkQuickDemo().TipAnnounced = false, want true")
+	}
+
+	nodes, err := service.Nodes()
+	if err != nil {
+		t.Fatalf("Nodes() error = %v", err)
+	}
+	if len(nodes) != 2 {
+		t.Fatalf("len(nodes) = %d, want 2", len(nodes))
+	}
+}
+
+func TestConsoleRunNetworkDemoCommand(t *testing.T) {
+	t.Setenv(guiDataDirEnv, t.TempDir())
+
+	service := NewService()
+	result, err := service.ExecuteCLI("runnetdemo")
+	if err != nil {
+		t.Fatalf("ExecuteCLI(runnetdemo) error = %v", err)
+	}
+	nodes, err := service.Nodes()
+	if err != nil {
+		t.Fatalf("Nodes() after runnetdemo error = %v", err)
+	}
+	for _, node := range nodes {
+		_ = service.StopNode(node.Address)
+	}
+	if !strings.Contains(result.Stdout, "network demo ready") {
+		t.Fatalf("runnetdemo stdout = %q, want ready message", result.Stdout)
+	}
+}
