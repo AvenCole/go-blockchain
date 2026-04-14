@@ -32,6 +32,8 @@
 - [ ] `showreorg`
 - [ ] `showevents`
 - [ ] `sendp2pk`
+- [ ] `sendmultisig`
+- [ ] `spendmultisig`
 - [ ] `runperf`
 
 ## 四、GUI 演示检查
@@ -51,6 +53,7 @@
 - [ ] 最近链事件中能看到 genesis / main_block / fork_block / reorg
 - [ ] 网络页能显示节点最近网络事件
 - [ ] CLI 可演示 P2PK 脚本模板
+- [ ] CLI 可演示多重签名流程
 - [ ] 浅色/深色模式切换正常
 
 ## 五、网络演示检查

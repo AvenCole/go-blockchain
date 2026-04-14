@@ -15,12 +15,13 @@ import (
 type Opcode byte
 
 const (
-	OpPushData    Opcode = 0x00
-	OpDup         Opcode = 0x76
-	OpHash160     Opcode = 0xa9
-	OpEqual       Opcode = 0x87
-	OpEqualVerify Opcode = 0x88
-	OpCheckSig    Opcode = 0xac
+	OpPushData      Opcode = 0x00
+	OpDup           Opcode = 0x76
+	OpHash160       Opcode = 0xa9
+	OpEqual         Opcode = 0x87
+	OpEqualVerify   Opcode = 0x88
+	OpCheckSig      Opcode = 0xac
+	OpCheckMultiSig Opcode = 0xae
 )
 
 type ScriptCommand struct {
@@ -66,6 +67,16 @@ func NewP2PKLockingScript(pubKey []byte) Script {
 	)
 }
 
+func NewMultiSigLockingScript(required int, pubKeys ...[]byte) Script {
+	commands := []ScriptCommand{NewPushData(encodeInt(required))}
+	for _, pubKey := range pubKeys {
+		commands = append(commands, NewPushData(pubKey))
+	}
+	commands = append(commands, NewPushData(encodeInt(len(pubKeys))))
+	commands = append(commands, ScriptCommand{Opcode: OpCheckMultiSig})
+	return NewScript(commands...)
+}
+
 func NewP2PKHUnlockingScript(signature []byte, pubKey []byte) Script {
 	return NewScript(
 		NewPushData(signature),
@@ -75,6 +86,14 @@ func NewP2PKHUnlockingScript(signature []byte, pubKey []byte) Script {
 
 func NewP2PKUnlockingScript(signature []byte) Script {
 	return NewScript(NewPushData(signature))
+}
+
+func NewMultiSigUnlockingScript(signatures ...[]byte) Script {
+	commands := make([]ScriptCommand, 0, len(signatures))
+	for _, signature := range signatures {
+		commands = append(commands, NewPushData(signature))
+	}
+	return NewScript(commands...)
 }
 
 func NewCoinbaseScript(data string) Script {
@@ -127,6 +146,8 @@ func (op Opcode) String() string {
 		return "OP_EQUALVERIFY"
 	case OpCheckSig:
 		return "OP_CHECKSIG"
+	case OpCheckMultiSig:
+		return "OP_CHECKMULTISIG"
 	default:
 		return fmt.Sprintf("OP_UNKNOWN_%#x", byte(op))
 	}
@@ -157,6 +178,39 @@ func ExtractP2PKPubKey(script Script) ([]byte, bool) {
 	return append([]byte(nil), script.Commands[0].Data...), true
 }
 
+func ExtractMultiSigPubKeys(script Script) (int, [][]byte, bool) {
+	if len(script.Commands) < 4 {
+		return 0, nil, false
+	}
+	if script.Commands[len(script.Commands)-1].Opcode != OpCheckMultiSig {
+		return 0, nil, false
+	}
+	if script.Commands[0].Opcode != OpPushData || script.Commands[len(script.Commands)-2].Opcode != OpPushData {
+		return 0, nil, false
+	}
+
+	required, ok := decodeInt(script.Commands[0].Data)
+	if !ok {
+		return 0, nil, false
+	}
+	total, ok := decodeInt(script.Commands[len(script.Commands)-2].Data)
+	if !ok || total <= 0 || total != len(script.Commands)-3 {
+		return 0, nil, false
+	}
+
+	pubKeys := make([][]byte, 0, total)
+	for i := 1; i <= total; i++ {
+		if script.Commands[i].Opcode != OpPushData {
+			return 0, nil, false
+		}
+		pubKeys = append(pubKeys, append([]byte(nil), script.Commands[i].Data...))
+	}
+	if required <= 0 || required > len(pubKeys) {
+		return 0, nil, false
+	}
+	return required, pubKeys, true
+}
+
 func ExtractP2PKHUnlockingData(script Script) ([]byte, []byte, bool) {
 	if len(script.Commands) != 2 {
 		return nil, nil, false
@@ -178,6 +232,20 @@ func ExtractP2PKSignature(script Script) ([]byte, bool) {
 		return nil, false
 	}
 	return append([]byte(nil), script.Commands[0].Data...), true
+}
+
+func ExtractMultiSigSignatures(script Script) ([][]byte, bool) {
+	if len(script.Commands) == 0 {
+		return nil, false
+	}
+	signatures := make([][]byte, 0, len(script.Commands))
+	for _, command := range script.Commands {
+		if command.Opcode != OpPushData {
+			return nil, false
+		}
+		signatures = append(signatures, append([]byte(nil), command.Data...))
+	}
+	return signatures, true
 }
 
 func VerifyScripts(unlocking Script, locking Script, digest []byte) bool {
@@ -239,6 +307,10 @@ func (e *scriptEngine) Execute(script Script) bool {
 				return false
 			}
 			e.push(encodeBool(verifyECDSASignature(pubKey, signature, e.digest)))
+		case OpCheckMultiSig:
+			if !e.checkMultiSig() {
+				return false
+			}
 		default:
 			return false
 		}
@@ -265,6 +337,54 @@ func (e *scriptEngine) popPubKeyAndSignature() ([]byte, []byte, bool) {
 		return nil, nil, false
 	}
 	return pubKey, signature, true
+}
+
+func (e *scriptEngine) checkMultiSig() bool {
+	totalBytes, ok := e.pop()
+	if !ok {
+		return false
+	}
+	total, ok := decodeInt(totalBytes)
+	if !ok || total <= 0 || len(e.stack) < total+1 {
+		return false
+	}
+
+	pubKeys := make([][]byte, total)
+	for i := total - 1; i >= 0; i-- {
+		pubKey, ok := e.pop()
+		if !ok {
+			return false
+		}
+		pubKeys[i] = pubKey
+	}
+
+	requiredBytes, ok := e.pop()
+	if !ok {
+		return false
+	}
+	required, ok := decodeInt(requiredBytes)
+	if !ok || required <= 0 || required > total || len(e.stack) < required {
+		return false
+	}
+
+	signatures := make([][]byte, required)
+	for i := required - 1; i >= 0; i-- {
+		signature, ok := e.pop()
+		if !ok {
+			return false
+		}
+		signatures[i] = signature
+	}
+
+	for i := 0; i < required; i++ {
+		if !verifyECDSASignature(pubKeys[i], signatures[i], e.digest) {
+			e.push(encodeBool(false))
+			return true
+		}
+	}
+
+	e.push(encodeBool(true))
+	return true
 }
 
 func (e *scriptEngine) push(value []byte) {
@@ -343,4 +463,18 @@ func shortHex(data []byte) string {
 		return text
 	}
 	return text[:12] + "..." + text[len(text)-12:]
+}
+
+func encodeInt(value int) []byte {
+	if value < 0 || value > 255 {
+		return []byte{}
+	}
+	return []byte{byte(value)}
+}
+
+func decodeInt(data []byte) (int, bool) {
+	if len(data) != 1 {
+		return 0, false
+	}
+	return int(data[0]), true
 }

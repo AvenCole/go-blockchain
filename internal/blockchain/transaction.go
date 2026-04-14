@@ -106,6 +106,96 @@ func NewP2PKTransaction(fromWallet *wallet.Wallet, toWallet *wallet.Wallet, amou
 	return buildSpendTransaction(fromWallet, mainOutput, amount, fee, bc, txVersionScriptVM)
 }
 
+// NewMultiSigTransaction creates a script-VM transaction whose main output is a multisig script.
+func NewMultiSigTransaction(fromWallet *wallet.Wallet, amount int, fee int, required int, toWallets []*wallet.Wallet, bc *Blockchain) (Transaction, error) {
+	pubKeys := make([][]byte, 0, len(toWallets))
+	for _, item := range toWallets {
+		if item == nil {
+			return Transaction{}, fmt.Errorf("multisig recipient wallet must not be nil")
+		}
+		pubKeys = append(pubKeys, append([]byte(nil), item.PublicKey...))
+	}
+	mainOutput, err := NewMultiSigOutput(amount, required, pubKeys...)
+	if err != nil {
+		return Transaction{}, err
+	}
+	return buildSpendTransaction(fromWallet, mainOutput, amount, fee, bc, txVersionScriptVM)
+}
+
+// NewSpendMultiSigTransaction spends one specific multisig output into a normal address.
+func NewSpendMultiSigTransaction(signers []*wallet.Wallet, sourceTxID []byte, sourceOut int, to string, amount int, fee int, bc *Blockchain) (Transaction, error) {
+	if len(signers) == 0 {
+		return Transaction{}, fmt.Errorf("at least one signer is required")
+	}
+	if amount <= 0 {
+		return Transaction{}, fmt.Errorf("amount must be positive")
+	}
+	if fee < 0 {
+		return Transaction{}, fmt.Errorf("fee must not be negative")
+	}
+
+	prevTx, err := bc.FindTransaction(sourceTxID)
+	if err != nil {
+		return Transaction{}, err
+	}
+	if sourceOut < 0 || sourceOut >= len(prevTx.Outputs) {
+		return Transaction{}, fmt.Errorf("source output index out of range")
+	}
+	prevOutput := prevTx.Outputs[sourceOut]
+	required, pubKeys, ok := ExtractMultiSigPubKeys(prevOutput.EffectiveScriptPubKey())
+	if !ok {
+		return Transaction{}, fmt.Errorf("source output is not multisig")
+	}
+	if len(signers) < required {
+		return Transaction{}, fmt.Errorf("need at least %d signers", required)
+	}
+
+	mainOutput, err := NewTXOutput(amount, to)
+	if err != nil {
+		return Transaction{}, err
+	}
+	outputs := []TXOutput{mainOutput}
+	requiredValue := amount + fee
+	if prevOutput.Value < requiredValue {
+		return Transaction{}, ErrInsufficientFunds
+	}
+	if prevOutput.Value > requiredValue {
+		changeOutput, err := NewTXOutput(prevOutput.Value-requiredValue, signers[0].Address())
+		if err != nil {
+			return Transaction{}, err
+		}
+		outputs = append(outputs, changeOutput)
+	}
+
+	tx := Transaction{
+		Version: txVersionScriptVM,
+		Inputs: []TXInput{{
+			TxID: append([]byte(nil), sourceTxID...),
+			Out:  sourceOut,
+		}},
+		Outputs: outputs,
+	}
+	tx.ID = tx.Hash()
+
+	prevTXs := map[string]Transaction{
+		tx.Inputs[0].TxIDHex(): prevTx,
+	}
+	signatures := make([][]byte, 0, required)
+	for i := 0; i < required; i++ {
+		if !bytes.Equal(signers[i].PublicKey, pubKeys[i]) {
+			return Transaction{}, fmt.Errorf("signer %d does not match multisig pubkey order", i)
+		}
+		signature, err := tx.signatureForInput(0, signers[i].PrivateKey, prevTXs)
+		if err != nil {
+			return Transaction{}, err
+		}
+		signatures = append(signatures, signature)
+	}
+	tx.Inputs[0].Signature = append([]byte(nil), signatures[0]...)
+	tx.Inputs[0].ScriptSig = NewMultiSigUnlockingScript(signatures...)
+	return tx, nil
+}
+
 func buildSpendTransaction(fromWallet *wallet.Wallet, mainOutput TXOutput, amount int, fee int, bc *Blockchain, version int) (Transaction, error) {
 	if fromWallet == nil {
 		return Transaction{}, fmt.Errorf("from wallet must not be nil")
@@ -207,6 +297,29 @@ func NewP2PKOutput(value int, pubKey []byte) (TXOutput, error) {
 	}, nil
 }
 
+// NewMultiSigOutput creates one output locked to multiple public keys.
+func NewMultiSigOutput(value int, required int, pubKeys ...[]byte) (TXOutput, error) {
+	if value <= 0 {
+		return TXOutput{}, fmt.Errorf("value must be positive")
+	}
+	if required <= 0 || required > len(pubKeys) || len(pubKeys) == 0 {
+		return TXOutput{}, fmt.Errorf("invalid multisig threshold")
+	}
+	copied := make([][]byte, 0, len(pubKeys))
+	for _, pubKey := range pubKeys {
+		if len(pubKey) == 0 {
+			return TXOutput{}, fmt.Errorf("multisig pubkey must not be empty")
+		}
+		copied = append(copied, append([]byte(nil), pubKey...))
+	}
+
+	return TXOutput{
+		Value:        value,
+		PubKeyHash:   nil,
+		ScriptPubKey: NewMultiSigLockingScript(required, copied...),
+	}, nil
+}
+
 // Hash calculates a deterministic transaction hash.
 func (tx Transaction) Hash() []byte {
 	copyTx := tx.Clone()
@@ -259,17 +372,11 @@ func (tx *Transaction) Sign(privKey ecdsa.PrivateKey, prevTXs map[string]Transac
 	}
 
 	for inID := range tx.Inputs {
-		digest := tx.signatureHash(inID, prevTXs)
-		if len(digest) == 0 {
-			return fmt.Errorf("sign input %d: empty digest", inID)
-		}
-
-		r, s, err := ecdsa.Sign(rand.Reader, &privKey, digest)
+		signature, err := tx.signatureForInput(inID, privKey, prevTXs)
 		if err != nil {
-			return fmt.Errorf("sign input %d: %w", inID, err)
+			return err
 		}
 
-		signature := append(r.Bytes(), s.Bytes()...)
 		tx.Inputs[inID].Signature = signature
 		if tx.UsesScriptVM() {
 			pubKey := append([]byte(nil), tx.Inputs[inID].PubKey...)
@@ -279,7 +386,9 @@ func (tx *Transaction) Sign(privKey ecdsa.PrivateKey, prevTXs map[string]Transac
 			}
 			prevTx := prevTXs[tx.Inputs[inID].TxIDHex()]
 			prevOutput := prevTx.Outputs[tx.Inputs[inID].Out]
-			if _, ok := ExtractP2PKPubKey(prevOutput.EffectiveScriptPubKey()); ok {
+			if _, _, ok := ExtractMultiSigPubKeys(prevOutput.EffectiveScriptPubKey()); ok {
+				tx.Inputs[inID].ScriptSig = NewMultiSigUnlockingScript(signature)
+			} else if _, ok := ExtractP2PKPubKey(prevOutput.EffectiveScriptPubKey()); ok {
 				tx.Inputs[inID].ScriptSig = NewP2PKUnlockingScript(signature)
 			} else {
 				tx.Inputs[inID].ScriptSig = NewP2PKHUnlockingScript(signature, pubKey)
@@ -446,6 +555,12 @@ func (in TXInput) FromDisplay() string {
 
 // Address renders one output as a wallet address string.
 func (out TXOutput) Address() string {
+	if required, pubKeys, ok := ExtractMultiSigPubKeys(out.EffectiveScriptPubKey()); ok {
+		return fmt.Sprintf("multisig-%dof%d", required, len(pubKeys))
+	}
+	if _, ok := ExtractP2PKPubKey(out.EffectiveScriptPubKey()); ok {
+		return "p2pk-output"
+	}
 	return wallet.AddressFromPubKeyHash(out.effectivePubKeyHash())
 }
 
@@ -481,6 +596,19 @@ func (tx Transaction) verifyInput(inID int, input TXInput, prevTXs map[string]Tr
 		prevOutput := prevTx.Outputs[input.Out]
 		unlocking := input.EffectiveScriptSig()
 		locking := prevOutput.EffectiveScriptPubKey()
+
+		if required, pubKeys, ok := ExtractMultiSigPubKeys(locking); ok {
+			signatures, ok := ExtractMultiSigSignatures(unlocking)
+			if !ok || len(signatures) != required {
+				return false
+			}
+			for i := 0; i < required; i++ {
+				if !verifyECDSASignature(pubKeys[i], signatures[i], tx.signatureHash(inID, prevTXs)) {
+					return false
+				}
+			}
+			return VerifyScripts(unlocking, locking, tx.signatureHash(inID, prevTXs))
+		}
 
 		if pubKey, ok := ExtractP2PKPubKey(locking); ok {
 			signature, ok := ExtractP2PKSignature(unlocking)
@@ -558,6 +686,19 @@ func serializePublicKey(publicKey *ecdsa.PublicKey) []byte {
 		return nil
 	}
 	return elliptic.Marshal(publicKey.Curve, publicKey.X, publicKey.Y)
+}
+
+func (tx Transaction) signatureForInput(inputIndex int, privKey ecdsa.PrivateKey, prevTXs map[string]Transaction) ([]byte, error) {
+	digest := tx.signatureHash(inputIndex, prevTXs)
+	if len(digest) == 0 {
+		return nil, fmt.Errorf("sign input %d: empty digest", inputIndex)
+	}
+
+	r, s, err := ecdsa.Sign(rand.Reader, &privKey, digest)
+	if err != nil {
+		return nil, fmt.Errorf("sign input %d: %w", inputIndex, err)
+	}
+	return append(r.Bytes(), s.Bytes()...), nil
 }
 
 func encodeOutputs(outputs []TXOutput) ([]byte, error) {

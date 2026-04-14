@@ -291,6 +291,74 @@ func TestRunSendP2PKAndMine(t *testing.T) {
 	}
 }
 
+func TestRunSendMultiSigAndSpendMultiSig(t *testing.T) {
+	cfg := config.Default()
+	cfg.DataDir = filepath.Join(t.TempDir(), "data")
+
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	app := NewApp(cfg, &stdout, &stderr)
+
+	createWallet := func() string {
+		if code := app.Run([]string{"createwallet"}); code != 0 {
+			t.Fatalf("createwallet exit code = %d, stderr=%q", code, stderr.String())
+		}
+		address := strings.TrimPrefix(strings.TrimSpace(stdout.String()), "created wallet address=")
+		stdout.Reset()
+		stderr.Reset()
+		return address
+	}
+
+	miner := createWallet()
+	alice := createWallet()
+	bob := createWallet()
+	carol := createWallet()
+
+	if code := app.Run([]string{"createblockchain", miner}); code != 0 {
+		t.Fatalf("createblockchain exit code = %d, stderr=%q", code, stderr.String())
+	}
+	stdout.Reset()
+	stderr.Reset()
+
+	if code := app.Run([]string{"sendmultisig", miner, "2", alice + "," + bob, "20", "1"}); code != 0 {
+		t.Fatalf("sendmultisig exit code = %d, stderr=%q", code, stderr.String())
+	}
+	if !strings.Contains(stdout.String(), "queued multisig transaction") {
+		t.Fatalf("sendmultisig output = %q", stdout.String())
+	}
+	txid := strings.TrimPrefix(strings.Split(strings.TrimSpace(stdout.String()), " ")[3], "txid=")
+	stdout.Reset()
+	stderr.Reset()
+
+	if code := app.Run([]string{"mine", miner}); code != 0 {
+		t.Fatalf("mine exit code = %d, stderr=%q", code, stderr.String())
+	}
+	stdout.Reset()
+	stderr.Reset()
+
+	if code := app.Run([]string{"spendmultisig", alice + "," + bob, txid, "0", carol, "10", "1"}); code != 0 {
+		t.Fatalf("spendmultisig exit code = %d, stderr=%q", code, stderr.String())
+	}
+	if !strings.Contains(stdout.String(), "queued spendmultisig transaction") {
+		t.Fatalf("spendmultisig output = %q", stdout.String())
+	}
+	stdout.Reset()
+	stderr.Reset()
+
+	if code := app.Run([]string{"mine", miner}); code != 0 {
+		t.Fatalf("mine second exit code = %d, stderr=%q", code, stderr.String())
+	}
+	stdout.Reset()
+	stderr.Reset()
+
+	if code := app.Run([]string{"getbalance", carol}); code != 0 {
+		t.Fatalf("getbalance carol exit code = %d, stderr=%q", code, stderr.String())
+	}
+	if !strings.Contains(stdout.String(), "balance["+carol+"]=10") {
+		t.Fatalf("getbalance carol output = %q", stdout.String())
+	}
+}
+
 func TestMempoolStaysEmptyAfterReopenFollowingMine(t *testing.T) {
 	cfg := config.Default()
 	cfg.DataDir = filepath.Join(t.TempDir(), "data")

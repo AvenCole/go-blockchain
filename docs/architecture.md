@@ -138,6 +138,7 @@ go-blockchain
 
 1. P2PKH
 2. P2PK
+3. 教学型多重签名
 
 ## 7. GUI 模块
 

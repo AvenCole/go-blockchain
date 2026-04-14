@@ -202,6 +202,21 @@ go run ./cmd/go-blockchain sendp2pk <from> <to> 20 1
 2. 现在还能直接演示 P2PK
 3. 说明脚本系统具备模板扩展能力
 
+### 5.13 教学型多重签名
+
+建议命令：
+
+```bash
+go run ./cmd/go-blockchain sendmultisig <from> 2 <addr1,addr2> 20 1
+go run ./cmd/go-blockchain spendmultisig <addr1,addr2> <source-txid> 0 <to> 10 1
+```
+
+讲解重点：
+
+1. Script VM 现在不只支持单签模板
+2. 还能演示多个签名者共同解锁同一输出
+3. 这说明脚本系统不只是“换个壳”，而是真能表达不同花费条件
+
 ### 5.11 节点最近网络事件
 
 讲解重点：

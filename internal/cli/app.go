@@ -2,6 +2,7 @@ package cli
 
 import (
 	"context"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
@@ -65,6 +66,10 @@ func (a App) Run(args []string) int {
 		return a.send(args[1:])
 	case "sendp2pk":
 		return a.sendP2PK(args[1:])
+	case "sendmultisig":
+		return a.sendMultiSig(args[1:])
+	case "spendmultisig":
+		return a.spendMultiSig(args[1:])
 	case "getbalance":
 		return a.getBalance(args[1:])
 	case "createwallet":
@@ -124,6 +129,8 @@ func (a App) printHelp() {
 	fmt.Fprintln(a.stdout, "  printchain                       Print the blockchain from tip to genesis")
 	fmt.Fprintln(a.stdout, "  send <from> <to> <amount> [fee]     Queue a signed transaction into the mempool")
 	fmt.Fprintln(a.stdout, "  sendp2pk <from> <to> <amount> [fee] Queue a transaction whose main output uses a P2PK script")
+	fmt.Fprintln(a.stdout, "  sendmultisig <from> <required> <addr1,addr2,...> <amount> [fee] Queue a transaction whose main output uses a multisig script")
+	fmt.Fprintln(a.stdout, "  spendmultisig <signer1,signer2,...> <source-txid> <out> <to> <amount> [fee] Spend a multisig output with ordered local signers")
 	fmt.Fprintln(a.stdout, "  getbalance <address>                Show the current UTXO balance for one address")
 	fmt.Fprintln(a.stdout, "  createwallet                     Create a new wallet and save it")
 	fmt.Fprintln(a.stdout, "  listaddresses                    List all saved wallet addresses")
@@ -451,8 +458,8 @@ func (a App) reindexUTXO(args []string) int {
 }
 
 func (a App) showScript(args []string) int {
-	if len(args) != 1 && len(args) != 2 {
-		fmt.Fprintln(a.stderr, "showscript requires: <address> [p2pkh|p2pk]")
+	if len(args) != 1 && len(args) != 2 && len(args) != 3 {
+		fmt.Fprintln(a.stderr, "showscript requires: <target> [p2pkh|p2pk|multisig] [required]")
 		return 1
 	}
 
@@ -488,6 +495,35 @@ func (a App) showScript(args []string) int {
 		script := blockchain.NewP2PKLockingScript(toWallet.PublicKey)
 		fmt.Fprintf(a.stdout, "template=p2pk\n")
 		fmt.Fprintf(a.stdout, "pubKey=%x\n", toWallet.PublicKey)
+		fmt.Fprintf(a.stdout, "scriptPubKey=%s\n", script.String())
+		return 0
+	case "multisig":
+		required := 2
+		if len(args) == 3 {
+			n, err := strconv.Atoi(args[2])
+			if err != nil || n <= 0 {
+				fmt.Fprintf(a.stderr, "parse required: %v\n", err)
+				return 1
+			}
+			required = n
+		}
+		wallets, err := wallet.NewWallets(a.cfg.DataDir)
+		if err != nil {
+			fmt.Fprintf(a.stderr, "load wallets: %v\n", err)
+			return 1
+		}
+		recipients, err := loadWalletsFromCSV(wallets, args[0])
+		if err != nil {
+			fmt.Fprintf(a.stderr, "multisig recipients: %v\n", err)
+			return 1
+		}
+		pubKeys := make([][]byte, 0, len(recipients))
+		for _, item := range recipients {
+			pubKeys = append(pubKeys, item.PublicKey)
+		}
+		script := blockchain.NewMultiSigLockingScript(required, pubKeys...)
+		fmt.Fprintf(a.stdout, "template=multisig\n")
+		fmt.Fprintf(a.stdout, "required=%d participants=%d\n", required, len(pubKeys))
 		fmt.Fprintf(a.stdout, "scriptPubKey=%s\n", script.String())
 		return 0
 	default:
@@ -560,6 +596,169 @@ func (a App) sendP2PK(args []string) int {
 
 	fmt.Fprintf(a.stdout, "queued p2pk transaction txid=%s fee=%d\n", tx.IDHex(), fee)
 	return 0
+}
+
+func (a App) sendMultiSig(args []string) int {
+	if len(args) != 4 && len(args) != 5 {
+		fmt.Fprintln(a.stderr, "sendmultisig requires: <from> <required> <addr1,addr2,...> <amount> [fee]")
+		return 1
+	}
+	if !wallet.ValidateAddress(args[0]) {
+		fmt.Fprintln(a.stderr, "invalid sender address")
+		return 1
+	}
+
+	required, err := strconv.Atoi(args[1])
+	if err != nil || required <= 0 {
+		fmt.Fprintf(a.stderr, "parse required: %v\n", err)
+		return 1
+	}
+	amount, err := strconv.Atoi(args[3])
+	if err != nil || amount <= 0 {
+		fmt.Fprintf(a.stderr, "parse amount: %v\n", err)
+		return 1
+	}
+	fee := 0
+	if len(args) == 5 {
+		fee, err = strconv.Atoi(args[4])
+		if err != nil {
+			fmt.Fprintf(a.stderr, "parse fee: %v\n", err)
+			return 1
+		}
+	}
+
+	chain, err := blockchain.OpenBlockchain(a.cfg.DataDir)
+	if err != nil {
+		if errors.Is(err, blockchain.ErrBlockchainNotInitialized) {
+			fmt.Fprintln(a.stderr, "blockchain not initialized; run createblockchain first")
+			return 1
+		}
+		fmt.Fprintf(a.stderr, "open blockchain: %v\n", err)
+		return 1
+	}
+	defer chain.Close()
+
+	wallets, err := wallet.NewWallets(a.cfg.DataDir)
+	if err != nil {
+		fmt.Fprintf(a.stderr, "load wallets: %v\n", err)
+		return 1
+	}
+	fromWallet, ok := wallets.GetWallet(args[0])
+	if !ok {
+		fmt.Fprintln(a.stderr, "sender wallet not found")
+		return 1
+	}
+	recipients, err := loadWalletsFromCSV(wallets, args[2])
+	if err != nil {
+		fmt.Fprintf(a.stderr, "multisig recipients: %v\n", err)
+		return 1
+	}
+
+	tx, err := blockchain.NewMultiSigTransaction(fromWallet, amount, fee, required, recipients, chain)
+	if err != nil {
+		fmt.Fprintf(a.stderr, "build multisig transaction: %v\n", err)
+		return 1
+	}
+	if err := chain.AddToMempool(tx); err != nil {
+		fmt.Fprintf(a.stderr, "queue multisig transaction: %v\n", err)
+		return 1
+	}
+
+	fmt.Fprintf(a.stdout, "queued multisig transaction txid=%s fee=%d\n", tx.IDHex(), fee)
+	return 0
+}
+
+func (a App) spendMultiSig(args []string) int {
+	if len(args) != 5 && len(args) != 6 {
+		fmt.Fprintln(a.stderr, "spendmultisig requires: <signer1,signer2,...> <source-txid> <out> <to> <amount> [fee]")
+		return 1
+	}
+	if !wallet.ValidateAddress(args[3]) {
+		fmt.Fprintln(a.stderr, "invalid recipient address")
+		return 1
+	}
+
+	sourceTxID, err := hex.DecodeString(args[1])
+	if err != nil {
+		fmt.Fprintf(a.stderr, "decode source txid: %v\n", err)
+		return 1
+	}
+	sourceOut, err := strconv.Atoi(args[2])
+	if err != nil || sourceOut < 0 {
+		fmt.Fprintf(a.stderr, "parse source out: %v\n", err)
+		return 1
+	}
+	amount, err := strconv.Atoi(args[4])
+	if err != nil || amount <= 0 {
+		fmt.Fprintf(a.stderr, "parse amount: %v\n", err)
+		return 1
+	}
+	fee := 0
+	if len(args) == 6 {
+		fee, err = strconv.Atoi(args[5])
+		if err != nil {
+			fmt.Fprintf(a.stderr, "parse fee: %v\n", err)
+			return 1
+		}
+	}
+
+	chain, err := blockchain.OpenBlockchain(a.cfg.DataDir)
+	if err != nil {
+		if errors.Is(err, blockchain.ErrBlockchainNotInitialized) {
+			fmt.Fprintln(a.stderr, "blockchain not initialized; run createblockchain first")
+			return 1
+		}
+		fmt.Fprintf(a.stderr, "open blockchain: %v\n", err)
+		return 1
+	}
+	defer chain.Close()
+
+	wallets, err := wallet.NewWallets(a.cfg.DataDir)
+	if err != nil {
+		fmt.Fprintf(a.stderr, "load wallets: %v\n", err)
+		return 1
+	}
+	signers, err := loadWalletsFromCSV(wallets, args[0])
+	if err != nil {
+		fmt.Fprintf(a.stderr, "multisig signers: %v\n", err)
+		return 1
+	}
+
+	tx, err := blockchain.NewSpendMultiSigTransaction(signers, sourceTxID, sourceOut, args[3], amount, fee, chain)
+	if err != nil {
+		fmt.Fprintf(a.stderr, "build spendmultisig transaction: %v\n", err)
+		return 1
+	}
+	if err := chain.AddToMempool(tx); err != nil {
+		fmt.Fprintf(a.stderr, "queue spendmultisig transaction: %v\n", err)
+		return 1
+	}
+
+	fmt.Fprintf(a.stdout, "queued spendmultisig transaction txid=%s fee=%d\n", tx.IDHex(), fee)
+	return 0
+}
+
+func loadWalletsFromCSV(wallets *wallet.Wallets, csv string) ([]*wallet.Wallet, error) {
+	items := strings.Split(csv, ",")
+	result := make([]*wallet.Wallet, 0, len(items))
+	for _, item := range items {
+		address := strings.TrimSpace(item)
+		if address == "" {
+			continue
+		}
+		if !wallet.ValidateAddress(address) {
+			return nil, fmt.Errorf("invalid wallet address: %s", address)
+		}
+		w, ok := wallets.GetWallet(address)
+		if !ok {
+			return nil, fmt.Errorf("wallet not found locally: %s", address)
+		}
+		result = append(result, w)
+	}
+	if len(result) == 0 {
+		return nil, fmt.Errorf("no wallet addresses provided")
+	}
+	return result, nil
 }
 
 func (a App) mine(args []string) int {
