@@ -53,6 +53,15 @@ export type OutputView = {
   scriptPubKey: string
 }
 
+export type MultiSigOutputView = {
+  txid: string
+  out: number
+  value: number
+  required: number
+  participants: string[]
+  scriptPubKey: string
+}
+
 export type TransactionView = {
   id: string
   version: number

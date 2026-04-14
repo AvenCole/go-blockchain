@@ -207,6 +207,9 @@ func TestQueueP2PKAndMultiSigTransactions(t *testing.T) {
 	if p2pkTxID == "" {
 		t.Fatalf("QueueP2PKTransaction() returned empty txid")
 	}
+	if _, err := service.MinePending(minerAddr); err != nil {
+		t.Fatalf("MinePending() error = %v", err)
+	}
 
 	multiTxID, err := service.QueueMultiSigTransaction(minerAddr, aliceAddr+","+bobAddr, 2, 10, 1)
 	if err != nil {
@@ -220,7 +223,7 @@ func TestQueueP2PKAndMultiSigTransactions(t *testing.T) {
 	if err != nil {
 		t.Fatalf("PendingTransactions() error = %v", err)
 	}
-	if len(pending) != 2 {
-		t.Fatalf("len(pending) = %d, want 2", len(pending))
+	if len(pending) != 1 {
+		t.Fatalf("len(pending) = %d, want 1", len(pending))
 	}
 }

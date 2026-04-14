@@ -42,17 +42,19 @@ import {
   executeCLI,
   fetchBlocks,
   fetchDashboard,
+  fetchMultiSigOutputs,
   fetchNodes,
   fetchPendingTransactions,
   fetchWallets,
   minePending,
   queueMultiSigTransaction,
   queueP2PKTransaction,
+  queueSpendMultiSigTransaction,
   queueTransaction,
   startNode,
   stopNode,
 } from './api/backend'
-import type { BlockView, CommandResult, DashboardData, NodeStatus, WalletView } from './types'
+import type { BlockView, CommandResult, DashboardData, MultiSigOutputView, NodeStatus, WalletView } from './types'
 
 type NavItem = {
   label: string
@@ -76,6 +78,7 @@ function App() {
   const [dashboard, setDashboard] = useState<DashboardData | null>(null)
   const [wallets, setWallets] = useState<WalletView[]>([])
   const [blocks, setBlocks] = useState<BlockView[]>([])
+  const [multiSigOutputs, setMultiSigOutputs] = useState<MultiSigOutputView[]>([])
   const [mempool, setMempool] = useState<string[]>([])
   const [nodes, setNodes] = useState<NodeStatus[]>([])
   const [message, setMessage] = useState('')
@@ -89,6 +92,14 @@ function App() {
     amount: '20',
     fee: '2',
   })
+  const [spendMultiSigForm, setSpendMultiSigForm] = useState({
+    signers: '',
+    sourceTxID: '',
+    out: '0',
+    to: '',
+    amount: '10',
+    fee: '1',
+  })
   const [minerAddress, setMinerAddress] = useState('')
   const [command, setCommand] = useState('')
   const [history, setHistory] = useState<CommandResult[]>([])
@@ -98,17 +109,19 @@ function App() {
   const refresh = async () => {
     try {
       setError('')
-      const [dash, walletList, blockList, pending, nodeList] = await Promise.all([
+      const [dash, walletList, blockList, pending, nodeList, multiSigList] = await Promise.all([
         fetchDashboard(),
         fetchWallets(),
         fetchBlocks(),
         fetchPendingTransactions(),
         fetchNodes(),
+        fetchMultiSigOutputs(),
       ])
 
       setDashboard(dash)
       setWallets(walletList)
       setBlocks(blockList)
+      setMultiSigOutputs(multiSigList)
       setMempool(pending)
       setNodes(nodeList)
 
@@ -129,6 +142,17 @@ function App() {
       }
       if (!connectForm.address && nodeList.length > 0) {
         setConnectForm((prev) => ({ ...prev, address: nodeList[0].address }))
+      }
+      if (!spendMultiSigForm.to && walletList.length > 0) {
+        setSpendMultiSigForm((prev) => ({ ...prev, to: walletList[0].address }))
+      }
+      if (!spendMultiSigForm.sourceTxID && multiSigList.length > 0) {
+        setSpendMultiSigForm((prev) => ({
+          ...prev,
+          sourceTxID: multiSigList[0].txid,
+          out: String(multiSigList[0].out),
+          signers: multiSigList[0].participants.join(','),
+        }))
       }
     } catch (err) {
       setError(String(err))
@@ -313,6 +337,24 @@ function App() {
     }
   }
 
+  const handleSpendMultiSig = async () => {
+    try {
+      setError('')
+      const txid = await queueSpendMultiSigTransaction(
+        spendMultiSigForm.signers,
+        spendMultiSigForm.sourceTxID,
+        Number(spendMultiSigForm.out),
+        spendMultiSigForm.to,
+        Number(spendMultiSigForm.amount),
+        Number(spendMultiSigForm.fee || '0'),
+      )
+      setMessage(`多签花费交易已进入 Mempool：${txid}`)
+      await refresh()
+    } catch (err) {
+      setError(String(err))
+    }
+  }
+
   return (
     <ThemeProvider theme={theme}>
       <CssBaseline />
@@ -441,10 +483,14 @@ function App() {
                     <TransactionsPage
                       txForm={txForm}
                       setTxForm={setTxForm}
+                      spendMultiSigForm={spendMultiSigForm}
+                      setSpendMultiSigForm={setSpendMultiSigForm}
+                      multiSigOutputs={multiSigOutputs}
                       minerAddress={minerAddress}
                       setMinerAddress={setMinerAddress}
                       mempool={mempool}
                       onQueueTransaction={handleQueueTransaction}
+                      onSpendMultiSig={handleSpendMultiSig}
                       onMine={handleMine}
                     />
                   </CardContent>

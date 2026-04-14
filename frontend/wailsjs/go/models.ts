@@ -243,6 +243,28 @@ export namespace gui {
 		}
 	}
 	
+	export class MultiSigOutputView {
+	    txid: string;
+	    out: number;
+	    value: number;
+	    required: number;
+	    participants: string[];
+	    scriptPubKey: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new MultiSigOutputView(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.txid = source["txid"];
+	        this.out = source["out"];
+	        this.value = source["value"];
+	        this.required = source["required"];
+	        this.participants = source["participants"];
+	        this.scriptPubKey = source["scriptPubKey"];
+	    }
+	}
 	export class NodeEventView {
 	    timestamp: string;
 	    kind: string;

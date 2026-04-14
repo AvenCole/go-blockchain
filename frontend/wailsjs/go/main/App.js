@@ -26,6 +26,10 @@ export function MinePending(arg1) {
   return window['go']['main']['App']['MinePending'](arg1);
 }
 
+export function MultiSigOutputs() {
+  return window['go']['main']['App']['MultiSigOutputs']();
+}
+
 export function Nodes() {
   return window['go']['main']['App']['Nodes']();
 }
@@ -40,6 +44,10 @@ export function QueueMultiSigTransaction(arg1, arg2, arg3, arg4, arg5) {
 
 export function QueueP2PKTransaction(arg1, arg2, arg3, arg4) {
   return window['go']['main']['App']['QueueP2PKTransaction'](arg1, arg2, arg3, arg4);
+}
+
+export function QueueSpendMultiSigTransaction(arg1, arg2, arg3, arg4, arg5, arg6) {
+  return window['go']['main']['App']['QueueSpendMultiSigTransaction'](arg1, arg2, arg3, arg4, arg5, arg6);
 }
 
 export function QueueTransaction(arg1, arg2, arg3, arg4) {

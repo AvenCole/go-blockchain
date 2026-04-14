@@ -5,8 +5,10 @@ import {
   Dashboard,
   ExecuteCLI,
   MinePending,
+  MultiSigOutputs,
   Nodes,
   PendingTransactions,
+  QueueSpendMultiSigTransaction,
   QueueTransaction,
   QueueP2PKTransaction,
   QueueMultiSigTransaction,
@@ -14,12 +16,13 @@ import {
   StopNode,
   Wallets,
 } from '../../wailsjs/go/main/App'
-import type { BlockView, CommandResult, DashboardData, NodeStatus, WalletView } from '../types'
+import type { BlockView, CommandResult, DashboardData, MultiSigOutputView, NodeStatus, WalletView } from '../types'
 
 export const fetchDashboard = (): Promise<DashboardData> => Dashboard()
 export const fetchWallets = (): Promise<WalletView[]> => Wallets()
 export const fetchBlocks = (): Promise<BlockView[]> => Blocks()
 export const fetchPendingTransactions = (): Promise<string[]> => PendingTransactions()
+export const fetchMultiSigOutputs = (): Promise<MultiSigOutputView[]> => MultiSigOutputs()
 export const createWallet = (): Promise<string> => CreateWallet()
 export const queueTransaction = (from: string, to: string, amount: number, fee: number): Promise<string> =>
   QueueTransaction(from, to, amount, fee)
@@ -32,6 +35,14 @@ export const queueMultiSigTransaction = (
   amount: number,
   fee: number,
 ): Promise<string> => QueueMultiSigTransaction(from, recipientsCSV, required, amount, fee)
+export const queueSpendMultiSigTransaction = (
+  signersCSV: string,
+  sourceTxID: string,
+  out: number,
+  to: string,
+  amount: number,
+  fee: number,
+): Promise<string> => QueueSpendMultiSigTransaction(signersCSV, sourceTxID, out, to, amount, fee)
 export const minePending = (minerAddress: string): Promise<string> => MinePending(minerAddress)
 export const executeCLI = (commandLine: string): Promise<CommandResult> => ExecuteCLI(commandLine)
 export const fetchNodes = (): Promise<NodeStatus[]> => Nodes()

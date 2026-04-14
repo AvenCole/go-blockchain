@@ -66,6 +66,15 @@ type ChainEvent struct {
 	DroppedConfirmedCount int    `json:"droppedConfirmedCount"`
 }
 
+type MultiSigOutputInfo struct {
+	TxID         string
+	Out          int
+	Value        int
+	Required     int
+	Participants []string
+	ScriptPubKey string
+}
+
 // Blockchain provides chain storage and append operations.
 type Blockchain struct {
 	dataDir string
@@ -703,6 +712,56 @@ func (bc *Blockchain) FindUTXO(pubKeyHash []byte) ([]TXOutput, error) {
 	}
 
 	return utxos, nil
+}
+
+// SpendableMultiSigOutputs returns all currently unspent multisig outputs.
+func (bc *Blockchain) SpendableMultiSigOutputs() ([]MultiSigOutputInfo, error) {
+	iter, err := bc.db.NewIter(&pebble.IterOptions{
+		LowerBound: utxoPrefix,
+		UpperBound: prefixUpperBound(utxoPrefix),
+	})
+	if err != nil {
+		return nil, err
+	}
+	defer iter.Close()
+
+	outputs := make([]MultiSigOutputInfo, 0)
+	for iter.First(); iter.Valid(); iter.Next() {
+		txIDHex := hex.EncodeToString(iter.Key()[len(utxoPrefix):])
+		cached, err := decodeCachedUTXOs(iter.Value())
+		if err != nil {
+			return nil, err
+		}
+		for _, item := range cached {
+			required, pubKeys, ok := ExtractMultiSigPubKeys(item.Output.EffectiveScriptPubKey())
+			if !ok {
+				continue
+			}
+			participants := make([]string, 0, len(pubKeys))
+			for _, pubKey := range pubKeys {
+				participants = append(participants, wallet.AddressFromPubKey(pubKey))
+			}
+			outputs = append(outputs, MultiSigOutputInfo{
+				TxID:         txIDHex,
+				Out:          item.Index,
+				Value:        item.Output.Value,
+				Required:     required,
+				Participants: participants,
+				ScriptPubKey: item.Output.EffectiveScriptPubKey().String(),
+			})
+		}
+	}
+	if err := iter.Error(); err != nil {
+		return nil, err
+	}
+
+	sort.Slice(outputs, func(i, j int) bool {
+		if outputs[i].TxID == outputs[j].TxID {
+			return outputs[i].Out < outputs[j].Out
+		}
+		return outputs[i].TxID < outputs[j].TxID
+	})
+	return outputs, nil
 }
 
 // ReindexUTXO rebuilds the cached UTXO set from the full chain.

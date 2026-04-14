@@ -14,6 +14,8 @@ export function ExecuteCLI(arg1:string):Promise<gui.CommandResult>;
 
 export function MinePending(arg1:string):Promise<string>;
 
+export function MultiSigOutputs():Promise<Array<gui.MultiSigOutputView>>;
+
 export function Nodes():Promise<Array<gui.NodeStatus>>;
 
 export function PendingTransactions():Promise<Array<string>>;
@@ -21,6 +23,8 @@ export function PendingTransactions():Promise<Array<string>>;
 export function QueueMultiSigTransaction(arg1:string,arg2:string,arg3:number,arg4:number,arg5:number):Promise<string>;
 
 export function QueueP2PKTransaction(arg1:string,arg2:string,arg3:number,arg4:number):Promise<string>;
+
+export function QueueSpendMultiSigTransaction(arg1:string,arg2:string,arg3:number,arg4:string,arg5:number,arg6:number):Promise<string>;
 
 export function QueueTransaction(arg1:string,arg2:string,arg3:number,arg4:number):Promise<string>;
 

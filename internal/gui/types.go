@@ -77,6 +77,15 @@ type OutputView struct {
 	ScriptPubKey string `json:"scriptPubKey"`
 }
 
+type MultiSigOutputView struct {
+	TxID         string   `json:"txid"`
+	Out          int      `json:"out"`
+	Value        int      `json:"value"`
+	Required     int      `json:"required"`
+	Participants []string `json:"participants"`
+	ScriptPubKey string   `json:"scriptPubKey"`
+}
+
 type CommandResult struct {
 	Command  string `json:"command"`
 	Stdout   string `json:"stdout"`

@@ -52,6 +52,14 @@ func (a *App) QueueMultiSigTransaction(from, recipientsCSV string, required int,
 	return a.service.QueueMultiSigTransaction(from, recipientsCSV, required, amount, fee)
 }
 
+func (a *App) MultiSigOutputs() ([]gui.MultiSigOutputView, error) {
+	return a.service.MultiSigOutputs()
+}
+
+func (a *App) QueueSpendMultiSigTransaction(signersCSV, sourceTxID string, out int, to string, amount int, fee int) (string, error) {
+	return a.service.QueueSpendMultiSigTransaction(signersCSV, sourceTxID, out, to, amount, fee)
+}
+
 func (a *App) MinePending(minerAddress string) (string, error) {
 	return a.service.MinePending(minerAddress)
 }
