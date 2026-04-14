@@ -14,6 +14,8 @@ var (
 	ErrBlockchainAlreadyExists = errors.New("blockchain already exists")
 	// ErrBlockchainNotInitialized reports that the chain has not been created yet.
 	ErrBlockchainNotInitialized = errors.New("blockchain not initialized")
+	// ErrInsufficientFunds reports that the sender cannot cover the requested amount.
+	ErrInsufficientFunds = errors.New("insufficient funds")
 )
 
 var lastHashKey = []byte("lh")
@@ -148,9 +150,14 @@ func (bc *Blockchain) AddBlock(transactions []Transaction) (*Block, error) {
 	return newBlock, nil
 }
 
-// SendTransaction creates a minimal transfer transaction and stores it in a new block.
+// SendTransaction creates a UTXO-style unsigned transaction and stores it in a new block.
 func (bc *Blockchain) SendTransaction(from, to string, amount int) (*Block, Transaction, error) {
-	tx, err := NewTransaction(from, to, amount)
+	accumulated, spendable, err := bc.FindSpendableOutputs(from, amount)
+	if err != nil {
+		return nil, Transaction{}, err
+	}
+
+	tx, err := NewUTXOTransaction(from, to, amount, spendable, accumulated)
 	if err != nil {
 		return nil, Transaction{}, err
 	}
@@ -201,31 +208,114 @@ func (bc *Blockchain) Blocks() ([]*Block, error) {
 	return blocks, nil
 }
 
-// BalanceOf computes a naive balance by summing minimal transaction flows.
+// BalanceOf computes the balance by summing unspent outputs.
 func (bc *Blockchain) BalanceOf(address string) (int, error) {
-	blocks, err := bc.Blocks()
+	utxos, err := bc.FindUTXO(address)
 	if err != nil {
 		return 0, err
 	}
 
 	balance := 0
+	for _, output := range utxos {
+		balance += output.Value
+	}
+
+	return balance, nil
+}
+
+// FindSpendableOutputs returns spendable outputs for one address.
+func (bc *Blockchain) FindSpendableOutputs(address string, amount int) (int, map[string][]int, error) {
+	blocks, err := bc.Blocks()
+	if err != nil {
+		return 0, nil, err
+	}
+
+	spentTXOs := make(map[string]map[int]bool)
+	unspent := make(map[string][]int)
+	accumulated := 0
+
 	for _, block := range blocks {
 		for _, tx := range block.Transactions {
-			for _, input := range tx.Inputs {
-				if input.From == address {
-					balance -= input.Amount
+			txID := tx.IDHex()
+
+			for outIdx, output := range tx.Outputs {
+				if spentTXOs[txID] != nil && spentTXOs[txID][outIdx] {
+					continue
+				}
+				if !output.IsLockedWith(address) {
+					continue
+				}
+
+				accumulated += output.Value
+				unspent[txID] = append(unspent[txID], outIdx)
+				if accumulated >= amount {
+					return accumulated, unspent, nil
 				}
 			}
 
-			for _, output := range tx.Outputs {
-				if output.To == address {
-					balance += output.Amount
+			if tx.IsCoinbase() {
+				continue
+			}
+
+			for _, input := range tx.Inputs {
+				if !input.UsesKey(address) {
+					continue
 				}
+
+				inputTxID := input.TxIDHex()
+				if spentTXOs[inputTxID] == nil {
+					spentTXOs[inputTxID] = make(map[int]bool)
+				}
+				spentTXOs[inputTxID][input.Out] = true
 			}
 		}
 	}
 
-	return balance, nil
+	return accumulated, unspent, nil
+}
+
+// FindUTXO returns all currently unspent outputs for one address.
+func (bc *Blockchain) FindUTXO(address string) ([]TXOutput, error) {
+	blocks, err := bc.Blocks()
+	if err != nil {
+		return nil, err
+	}
+
+	spentTXOs := make(map[string]map[int]bool)
+	var utxos []TXOutput
+
+	for _, block := range blocks {
+		for _, tx := range block.Transactions {
+			txID := tx.IDHex()
+
+			for outIdx, output := range tx.Outputs {
+				if spentTXOs[txID] != nil && spentTXOs[txID][outIdx] {
+					continue
+				}
+				if output.IsLockedWith(address) {
+					utxos = append(utxos, output)
+				}
+			}
+
+			if tx.IsCoinbase() {
+				continue
+			}
+
+			for _, input := range tx.Inputs {
+				if !input.UsesKey(address) {
+					continue
+				}
+
+				inputTxID := input.TxIDHex()
+				if spentTXOs[inputTxID] == nil {
+					spentTXOs[inputTxID] = make(map[int]bool)
+				}
+				spentTXOs[inputTxID][input.Out] = true
+			}
+		}
+	}
+
+	return utxos, nil
 }
 
 // Close releases the underlying database handle.

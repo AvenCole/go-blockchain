@@ -10,24 +10,26 @@ import (
 )
 
 const coinbaseInputSource = "COINBASE"
+const subsidy = 50
 
-// Transaction is the minimal, unsigned transaction model used in Plan 3.
+// Transaction is the unsigned UTXO-style transaction model used in Plan 5.
 type Transaction struct {
 	ID      []byte
 	Inputs  []TXInput
 	Outputs []TXOutput
 }
 
-// TXInput is a simplified input that only records a source address and amount.
+// TXInput references one previous transaction output.
 type TXInput struct {
-	From   string
-	Amount int
+	TxID []byte
+	Out  int
+	From string
 }
 
-// TXOutput is a simplified output that only records a destination address and amount.
+// TXOutput locks one value to a destination address.
 type TXOutput struct {
-	To     string
-	Amount int
+	Value int
+	To    string
 }
 
 // NewCoinbaseTransaction creates the prototype mining reward transaction.
@@ -39,14 +41,15 @@ func NewCoinbaseTransaction(to, data string) Transaction {
 	tx := Transaction{
 		Inputs: []TXInput{
 			{
-				From:   coinbaseInputSource,
-				Amount: 0,
+				TxID: nil,
+				Out:  -1,
+				From: data,
 			},
 		},
 		Outputs: []TXOutput{
 			{
-				To:     to,
-				Amount: 50,
+				To:    to,
+				Value: subsidy,
 			},
 		},
 	}
@@ -54,28 +57,50 @@ func NewCoinbaseTransaction(to, data string) Transaction {
 	return tx
 }
 
-// NewTransaction creates the minimal unsigned transfer transaction.
-func NewTransaction(from, to string, amount int) (Transaction, error) {
+// NewUTXOTransaction creates an unsigned transaction from spendable outputs.
+func NewUTXOTransaction(from, to string, amount int, spendable map[string][]int, accumulated int) (Transaction, error) {
 	if from == "" || to == "" {
 		return Transaction{}, fmt.Errorf("from and to must not be empty")
 	}
 	if amount <= 0 {
 		return Transaction{}, fmt.Errorf("amount must be positive")
 	}
+	if accumulated < amount {
+		return Transaction{}, ErrInsufficientFunds
+	}
+
+	var inputs []TXInput
+	for txIDHex, indexes := range spendable {
+		txID, err := hex.DecodeString(txIDHex)
+		if err != nil {
+			return Transaction{}, fmt.Errorf("decode txid %s: %w", txIDHex, err)
+		}
+
+		for _, index := range indexes {
+			inputs = append(inputs, TXInput{
+				TxID: append([]byte(nil), txID...),
+				Out:  index,
+				From: from,
+			})
+		}
+	}
+
+	outputs := []TXOutput{
+		{
+			To:    to,
+			Value: amount,
+		},
+	}
+	if accumulated > amount {
+		outputs = append(outputs, TXOutput{
+			To:    from,
+			Value: accumulated - amount,
+		})
+	}
 
 	tx := Transaction{
-		Inputs: []TXInput{
-			{
-				From:   from,
-				Amount: amount,
-			},
-		},
-		Outputs: []TXOutput{
-			{
-				To:     to,
-				Amount: amount,
-			},
-		},
+		Inputs:  inputs,
+		Outputs: outputs,
 	}
 	tx.ID = tx.Hash()
 	return tx, nil
@@ -118,7 +143,7 @@ func DeserializeTransaction(data []byte) (*Transaction, error) {
 
 // IsCoinbase reports whether a transaction is the prototype mining reward.
 func (tx Transaction) IsCoinbase() bool {
-	return len(tx.Inputs) == 1 && tx.Inputs[0].From == coinbaseInputSource
+	return len(tx.Inputs) == 1 && len(tx.Inputs[0].TxID) == 0 && tx.Inputs[0].Out == -1
 }
 
 // IDHex returns the transaction ID in hex for CLI display.
@@ -134,7 +159,13 @@ func (tx Transaction) Clone() Transaction {
 		Outputs: make([]TXOutput, len(tx.Outputs)),
 	}
 
-	copy(cloned.Inputs, tx.Inputs)
+	for i, input := range tx.Inputs {
+		cloned.Inputs[i] = TXInput{
+			TxID: append([]byte(nil), input.TxID...),
+			Out:  input.Out,
+			From: input.From,
+		}
+	}
 	copy(cloned.Outputs, tx.Outputs)
 
 	return cloned
@@ -147,5 +178,20 @@ func (tx Transaction) String() string {
 
 // AmountString is a small helper for CLI formatting.
 func (out TXOutput) AmountString() string {
-	return strconv.Itoa(out.Amount)
+	return strconv.Itoa(out.Value)
+}
+
+// UsesKey reports whether an input spends outputs belonging to the given address.
+func (in TXInput) UsesKey(address string) bool {
+	return in.From == address
+}
+
+// IsLockedWith reports whether the output belongs to the given address.
+func (out TXOutput) IsLockedWith(address string) bool {
+	return out.To == address
+}
+
+// TxIDHex returns the referenced transaction ID for CLI printing.
+func (in TXInput) TxIDHex() string {
+	return hex.EncodeToString(in.TxID)
 }

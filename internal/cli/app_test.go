@@ -116,7 +116,7 @@ func TestCreateBlockchainAddBlockAndPrintChain(t *testing.T) {
 		t.Fatalf("printchain output missing transaction count: %q", output)
 	}
 
-	if !strings.Contains(output, "Output: to=system amount=50") {
+	if !strings.Contains(output, "Output: to=system value=50") {
 		t.Fatalf("printchain output missing debug coinbase output: %q", output)
 	}
 }
@@ -147,6 +147,39 @@ func TestRunSendAndGetBalance(t *testing.T) {
 
 	if !strings.Contains(stdout.String(), "balance[alice]=20") {
 		t.Fatalf("getbalance output = %q, want alice balance", stdout.String())
+	}
+
+	stdout.Reset()
+	stderr.Reset()
+	if code := app.Run([]string{"getbalance", "miner"}); code != 0 {
+		t.Fatalf("getbalance miner exit code = %d, stderr=%q", code, stderr.String())
+	}
+
+	if !strings.Contains(stdout.String(), "balance[miner]=30") {
+		t.Fatalf("getbalance miner output = %q, want miner balance", stdout.String())
+	}
+}
+
+func TestSendInsufficientFunds(t *testing.T) {
+	cfg := config.Default()
+	cfg.DataDir = filepath.Join(t.TempDir(), "data")
+
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	app := NewApp(cfg, &stdout, &stderr)
+
+	if code := app.Run([]string{"createblockchain", "miner"}); code != 0 {
+		t.Fatalf("createblockchain exit code = %d, stderr=%q", code, stderr.String())
+	}
+
+	stdout.Reset()
+	stderr.Reset()
+	if code := app.Run([]string{"send", "alice", "bob", "10"}); code != 1 {
+		t.Fatalf("send insufficient funds exit code = %d, want 1", code)
+	}
+
+	if !strings.Contains(stderr.String(), "insufficient funds") {
+		t.Fatalf("stderr = %q, want insufficient funds", stderr.String())
 	}
 }
 
