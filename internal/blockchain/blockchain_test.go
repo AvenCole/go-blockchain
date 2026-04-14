@@ -66,6 +66,12 @@ func TestCreateBlockchainAndIterate(t *testing.T) {
 	if len(blocks[0].Transactions[0].Inputs[0].Signature) == 0 {
 		t.Fatalf("tx signature missing")
 	}
+	if len(blocks[0].MerkleRoot) == 0 {
+		t.Fatalf("merkle root missing")
+	}
+	if !blocks[0].VerifyMerkleRoot() {
+		t.Fatalf("VerifyMerkleRoot() = false, want true")
+	}
 }
 
 func TestOpenBlockchain(t *testing.T) {
@@ -344,6 +350,33 @@ func TestVerifyTransactionRejectsInvalidOutputIndexWithoutPanic(t *testing.T) {
 
 	if _, err := created.AddBlock([]Transaction{tx}); !errors.Is(err, ErrInvalidTransaction) {
 		t.Fatalf("AddBlock(invalid tx) error = %v, want ErrInvalidTransaction", err)
+	}
+}
+
+func TestMerkleRootRejectsTampering(t *testing.T) {
+	dataDir := filepath.Join(t.TempDir(), "data")
+	miner := mustNewWallet(t)
+	alice := mustNewWallet(t)
+
+	created, err := CreateBlockchain(dataDir, miner.Address())
+	if err != nil {
+		t.Fatalf("CreateBlockchain() error = %v", err)
+	}
+	t.Cleanup(func() {
+		_ = created.Close()
+	})
+
+	block, _, err := created.SendTransaction(miner, alice.Address(), 20)
+	if err != nil {
+		t.Fatalf("SendTransaction() error = %v", err)
+	}
+	if !block.VerifyMerkleRoot() {
+		t.Fatalf("VerifyMerkleRoot() = false, want true")
+	}
+
+	block.Transactions[0].Outputs[0].Value = 999
+	if block.VerifyMerkleRoot() {
+		t.Fatalf("VerifyMerkleRoot(tampered) = true, want false")
 	}
 }
 
