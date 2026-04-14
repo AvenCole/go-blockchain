@@ -1,0 +1,176 @@
+# 答辩演示脚本
+
+## 一、总演示思路
+
+答辩时建议按下面顺序演示：
+
+1. 先讲系统目标与模块
+2. 再演示 CLI 主链路
+3. 再演示 GUI
+4. 再演示网络与安全
+5. 最后展示性能实验结果
+
+## 二、开场介绍
+
+可以这样开场：
+
+“本项目是一个基于 Go 的区块链模拟仿真系统，采用分阶段实现方式，已经完成从区块、交易、钱包、UTXO、签名、Merkle、PoW、Mempool、网络模拟，到 GUI 和性能实验的完整链路。” 
+
+## 三、建议演示顺序
+
+### 1. 钱包创建
+
+命令：
+
+```bash
+go run ./cmd/go-blockchain createwallet
+go run ./cmd/go-blockchain createwallet
+go run ./cmd/go-blockchain listaddresses
+```
+
+讲解重点：
+
+1. 已经有真实钱包和地址
+2. 地址不是手写字符串
+3. 钱包支持持久化
+
+### 2. 初始化区块链
+
+命令：
+
+```bash
+go run ./cmd/go-blockchain createblockchain <miner-address>
+go run ./cmd/go-blockchain printchain
+```
+
+讲解重点：
+
+1. 创世区块已建立
+2. 区块头已经包含 MerkleRoot、Difficulty、Nonce
+3. PoW 校验已经成立
+
+### 3. 发送交易 + Mempool + 挖矿
+
+命令：
+
+```bash
+go run ./cmd/go-blockchain send <miner-address> <alice-address> 20 2
+go run ./cmd/go-blockchain printmempool
+go run ./cmd/go-blockchain mine <miner-address>
+go run ./cmd/go-blockchain getbalance <miner-address>
+go run ./cmd/go-blockchain getbalance <alice-address>
+go run ./cmd/go-blockchain printchain
+```
+
+讲解重点：
+
+1. 交易先进入 Mempool
+2. 挖矿后新区块生成
+3. coinbase 奖励和手续费都进入矿工收益
+4. 输入输出是 UTXO 风格
+5. 交易有签名校验
+
+### 4. 双花攻击模拟
+
+命令：
+
+```bash
+go run ./cmd/go-blockchain simdouble <from> <to1> <to2> 20
+```
+
+讲解重点：
+
+1. 第一笔交易进入池中
+2. 第二笔冲突交易被系统拒绝
+3. 双花检测不是人工判断，而是系统自动生效
+
+### 5. 网络模拟
+
+开两个终端：
+
+```bash
+go run ./cmd/go-blockchain startnode 127.0.0.1:3010
+go run ./cmd/go-blockchain startnode 127.0.0.1:3011 127.0.0.1:3010
+```
+
+讲解重点：
+
+1. 节点之间可以发现彼此
+2. 区块和交易能够传播
+3. 新节点能同步已有链
+
+### 6. GUI 演示
+
+直接打开桌面程序：
+
+```text
+build/bin/go-blockchain-gui.exe
+```
+
+建议在 GUI 中演示：
+
+1. Dashboard
+2. 钱包页面
+3. 区块浏览
+4. 交易排队
+5. 挖矿操作
+
+讲解重点：
+
+1. GUI 不是静态壳
+2. 页面调用的是真实 Go 后端
+3. CLI 与 GUI 展示的是同一套能力
+
+### 7. 性能实验
+
+命令：
+
+```bash
+go run ./cmd/go-blockchain runperf 20
+```
+
+再展示：
+
+1. `docs/perf/latest.md`
+2. `docs/perf/latest.json`
+
+讲解重点：
+
+1. 全链扫描 vs UTXO 缓存
+2. 为什么 UTXO 缓存更快
+3. 系统不只是能跑，还有实验数据支撑
+
+## 四、老师可能会问的问题
+
+### Q1：你这个系统和真正比特币的差距在哪？
+
+建议回答：
+
+1. 当前已经覆盖区块链主链路的大部分核心机制
+2. 但还没有实现完整 Script / OP 虚拟机
+3. 网络层也还是教学型本地模拟，不是完整比特币 P2P 协议
+
+### Q2：为什么要分这么多阶段做？
+
+建议回答：
+
+1. 这样每一阶段目标清晰
+2. 更容易验证
+3. 更适合答辩讲解
+4. 也能避免一开始把所有复杂性混在一起
+
+### Q3：你系统里最有价值的部分是什么？
+
+建议回答：
+
+1. UTXO + 签名交易链路
+2. Merkle + PoW 区块头
+3. Mempool + 手续费 + coinbase 奖励
+4. 网络模拟
+5. GUI 和性能实验
+
+## 五、答辩结束总结
+
+最后可以这样收尾：
+
+“这个系统已经完成了一个教学型区块链模拟系统从底层数据结构、交易安全、共识机制，到网络模拟、GUI 展示和性能实验的完整闭环。后续如果继续扩展，最优先的方向是 Script 虚拟机、更完整的分叉处理和更强的网络协议模拟。” 
