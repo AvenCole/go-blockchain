@@ -1,0 +1,49 @@
+import { Box, Button, Card, CardContent, Divider, Stack, Typography } from '@mui/material'
+import type { WalletView } from '../types'
+
+type WalletsPageProps = {
+  wallets: WalletView[]
+  onCreateWallet: () => Promise<void>
+}
+
+function WalletsPage({ wallets, onCreateWallet }: WalletsPageProps) {
+  return (
+    <Box sx={{ display: 'grid', gap: 2, gridTemplateColumns: { xs: '1fr', md: 'minmax(280px, 1fr) 2fr' } }}>
+      <Box>
+        <Card variant="outlined">
+          <CardContent>
+            <Typography variant="h6">钱包操作</Typography>
+            <Typography color="text.secondary" sx={{ mt: 1 }}>
+              这里创建的钱包会直接写入真实后端钱包文件。
+            </Typography>
+            <Button sx={{ mt: 2 }} fullWidth variant="contained" onClick={onCreateWallet}>
+              创建钱包
+            </Button>
+          </CardContent>
+        </Card>
+      </Box>
+      <Box>
+        <Card variant="outlined">
+          <CardContent>
+            <Typography variant="h6">地址与余额</Typography>
+            <Stack spacing={1.5} sx={{ mt: 2 }}>
+              {wallets.map((item) => (
+                <Card key={item.address} variant="outlined">
+                  <CardContent>
+                    <Typography variant="body2" sx={{ wordBreak: 'break-all' }}>
+                      {item.address}
+                    </Typography>
+                    <Divider sx={{ my: 1.5 }} />
+                    <Typography color="text.secondary">余额：{item.balance}</Typography>
+                  </CardContent>
+                </Card>
+              ))}
+            </Stack>
+          </CardContent>
+        </Card>
+      </Box>
+    </Box>
+  )
+}
+
+export default WalletsPage
