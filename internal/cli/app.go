@@ -10,6 +10,7 @@ import (
 
 	"go-blockchain/internal/blockchain"
 	"go-blockchain/internal/config"
+	"go-blockchain/internal/wallet"
 )
 
 const version = "0.1.0"
@@ -57,6 +58,10 @@ func (a App) Run(args []string) int {
 		return a.send(args[1:])
 	case "getbalance":
 		return a.getBalance(args[1:])
+	case "createwallet":
+		return a.createWallet(args[1:])
+	case "listaddresses":
+		return a.listAddresses(args[1:])
 	default:
 		fmt.Fprintf(a.stderr, "unknown command: %s\n\n", args[0])
 		a.printHelp()
@@ -88,6 +93,8 @@ func (a App) printHelp() {
 	fmt.Fprintln(a.stdout, "  printchain                       Print the blockchain from tip to genesis")
 	fmt.Fprintln(a.stdout, "  send <from> <to> <amount>        Add a minimal unsigned transaction block")
 	fmt.Fprintln(a.stdout, "  getbalance <address>             Show the naive balance for one address")
+	fmt.Fprintln(a.stdout, "  createwallet                     Create a new wallet and save it")
+	fmt.Fprintln(a.stdout, "  listaddresses                    List all saved wallet addresses")
 }
 
 func (a App) printVersion() {
@@ -114,7 +121,7 @@ func (a App) printDoctor() {
 	fmt.Fprintf(a.stdout, "log_level=%s\n", a.cfg.LogLevel)
 	fmt.Fprintf(a.stdout, "network_mode=%s\n", a.cfg.NetworkMode)
 	fmt.Fprintf(a.stdout, "chain_status=%s\n", chainStatus)
-	fmt.Fprintln(a.stdout, "next_step=implement wallet system")
+	fmt.Fprintln(a.stdout, "next_step=upgrade to UTXO transaction model")
 }
 
 func (a App) createBlockchain(args []string) int {
@@ -272,5 +279,57 @@ func (a App) getBalance(args []string) int {
 	}
 
 	fmt.Fprintf(a.stdout, "balance[%s]=%d\n", args[0], balance)
+	return 0
+}
+
+func (a App) createWallet(args []string) int {
+	if len(args) != 0 {
+		fmt.Fprintln(a.stderr, "createwallet does not accept extra arguments")
+		return 1
+	}
+
+	wallets, err := wallet.NewWallets(a.cfg.DataDir)
+	if err != nil {
+		fmt.Fprintf(a.stderr, "load wallets: %v\n", err)
+		return 1
+	}
+
+	address, err := wallets.CreateWallet()
+	if err != nil {
+		fmt.Fprintf(a.stderr, "create wallet: %v\n", err)
+		return 1
+	}
+
+	if err := wallets.SaveFile(a.cfg.DataDir); err != nil {
+		fmt.Fprintf(a.stderr, "save wallets: %v\n", err)
+		return 1
+	}
+
+	fmt.Fprintf(a.stdout, "created wallet address=%s\n", address)
+	return 0
+}
+
+func (a App) listAddresses(args []string) int {
+	if len(args) != 0 {
+		fmt.Fprintln(a.stderr, "listaddresses does not accept extra arguments")
+		return 1
+	}
+
+	wallets, err := wallet.NewWallets(a.cfg.DataDir)
+	if err != nil {
+		fmt.Fprintf(a.stderr, "load wallets: %v\n", err)
+		return 1
+	}
+
+	addresses := wallets.Addresses()
+	if len(addresses) == 0 {
+		fmt.Fprintln(a.stdout, "no wallet addresses found")
+		return 0
+	}
+
+	for _, address := range addresses {
+		fmt.Fprintln(a.stdout, address)
+	}
+
 	return 0
 }
