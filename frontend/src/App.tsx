@@ -462,7 +462,14 @@ function App() {
               <Stack spacing={2.5} sx={{ minWidth: 0 }}>
                 <Card variant="outlined" sx={{ display: tab === 0 ? 'block' : 'none' }}>
                   <CardContent>
-                    <DashboardPage dashboard={dashboard} latestBlock={latestBlock} />
+                    <DashboardPage
+                      dashboard={dashboard}
+                      latestBlock={latestBlock}
+                      wallets={wallets}
+                      mempool={mempool}
+                      multiSigOutputs={multiSigOutputs}
+                      nodes={nodes}
+                    />
                   </CardContent>
                 </Card>
 
