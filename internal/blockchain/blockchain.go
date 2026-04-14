@@ -38,8 +38,9 @@ var mempoolPrefix = []byte("mempool-")
 
 // Blockchain provides chain storage and append operations.
 type Blockchain struct {
-	tip []byte
-	db  *pebble.DB
+	dataDir string
+	tip     []byte
+	db      *pebble.DB
 }
 
 // DBPath resolves the storage location used for the chain database.
@@ -111,8 +112,9 @@ func CreateBlockchain(dataDir string, genesisAddress string) (*Blockchain, error
 	}
 
 	bc := &Blockchain{
-		tip: genesis.Hash,
-		db:  db,
+		dataDir: dataDir,
+		tip:     genesis.Hash,
+		db:      db,
 	}
 
 	return bc, nil
@@ -136,8 +138,9 @@ func OpenBlockchain(dataDir string) (*Blockchain, error) {
 	}
 
 	bc := &Blockchain{
-		tip: tip,
-		db:  db,
+		dataDir: dataDir,
+		tip:     tip,
+		db:      db,
 	}
 	ok, err := bc.hasUTXOEntries()
 	if err != nil {

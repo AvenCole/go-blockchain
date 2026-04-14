@@ -2,6 +2,7 @@ package cli
 
 import (
 	"bytes"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -43,7 +44,7 @@ func TestRunDoctor(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("Run(doctor) exit code = %d, want 0", code)
 	}
-	if !strings.Contains(stdout.String(), "next_step=implement gui system") {
+	if !strings.Contains(stdout.String(), "next_step=prepare final report and presentation") {
 		t.Fatalf("doctor output missing next step: %q", stdout.String())
 	}
 }
@@ -326,6 +327,62 @@ func TestRunUnknownCommand(t *testing.T) {
 	}
 	if !strings.Contains(stderr.String(), "unknown command") {
 		t.Fatalf("stderr missing unknown command error: %q", stderr.String())
+	}
+}
+
+func TestRunPerf(t *testing.T) {
+	cfg := config.Default()
+	cfg.DataDir = filepath.Join(t.TempDir(), "data")
+	perfDir := filepath.Join(t.TempDir(), "perf")
+	t.Setenv(perfOutputDirEnv, perfDir)
+
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	app := NewApp(cfg, &stdout, &stderr)
+
+	if code := app.Run([]string{"createwallet"}); code != 0 {
+		t.Fatalf("createwallet miner exit code = %d, stderr=%q", code, stderr.String())
+	}
+	miner := strings.TrimPrefix(strings.TrimSpace(stdout.String()), "created wallet address=")
+	stdout.Reset()
+	stderr.Reset()
+
+	if code := app.Run([]string{"createwallet"}); code != 0 {
+		t.Fatalf("createwallet alice exit code = %d, stderr=%q", code, stderr.String())
+	}
+	alice := strings.TrimPrefix(strings.TrimSpace(stdout.String()), "created wallet address=")
+	stdout.Reset()
+	stderr.Reset()
+
+	if code := app.Run([]string{"createblockchain", miner}); code != 0 {
+		t.Fatalf("createblockchain exit code = %d, stderr=%q", code, stderr.String())
+	}
+	stdout.Reset()
+	stderr.Reset()
+
+	if code := app.Run([]string{"send", miner, alice, "20", "2"}); code != 0 {
+		t.Fatalf("send exit code = %d, stderr=%q", code, stderr.String())
+	}
+	stdout.Reset()
+	stderr.Reset()
+
+	if code := app.Run([]string{"mine", miner}); code != 0 {
+		t.Fatalf("mine exit code = %d, stderr=%q", code, stderr.String())
+	}
+	stdout.Reset()
+	stderr.Reset()
+
+	if code := app.Run([]string{"runperf", "5"}); code != 0 {
+		t.Fatalf("runperf exit code = %d, stderr=%q", code, stderr.String())
+	}
+	if !strings.Contains(stdout.String(), "speedup=") {
+		t.Fatalf("runperf output = %q, want speedup", stdout.String())
+	}
+	if _, err := os.Stat(filepath.Join(perfDir, "latest.json")); err != nil {
+		t.Fatalf("latest.json missing: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(perfDir, "latest.md")); err != nil {
+		t.Fatalf("latest.md missing: %v", err)
 	}
 }
 

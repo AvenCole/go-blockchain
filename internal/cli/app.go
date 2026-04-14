@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"syscall"
@@ -19,6 +20,7 @@ import (
 )
 
 const version = "0.1.0"
+const perfOutputDirEnv = "GO_BLOCKCHAIN_PERF_DIR"
 
 // App provides the minimal CLI skeleton approved in Plan 1.
 type App struct {
@@ -77,6 +79,8 @@ func (a App) Run(args []string) int {
 		return a.startNode(args[1:])
 	case "simdouble":
 		return a.simulateDoubleSpend(args[1:])
+	case "runperf":
+		return a.runPerformance(args[1:])
 	default:
 		fmt.Fprintf(a.stderr, "unknown command: %s\n\n", args[0])
 		a.printHelp()
@@ -115,6 +119,7 @@ func (a App) printHelp() {
 	fmt.Fprintln(a.stdout, "  mine <miner-address>             Mine all pending transactions into a block")
 	fmt.Fprintln(a.stdout, "  printmempool                     List pending transaction IDs")
 	fmt.Fprintln(a.stdout, "  simdouble <from> <to1> <to2> <amount> [fee]  Demonstrate double-spend rejection")
+	fmt.Fprintln(a.stdout, "  runperf [lookups]                Run cache-vs-scan performance comparison")
 }
 
 func (a App) printVersion() {
@@ -141,7 +146,7 @@ func (a App) printDoctor() {
 	fmt.Fprintf(a.stdout, "log_level=%s\n", a.cfg.LogLevel)
 	fmt.Fprintf(a.stdout, "network_mode=%s\n", a.cfg.NetworkMode)
 	fmt.Fprintf(a.stdout, "chain_status=%s\n", chainStatus)
-	fmt.Fprintln(a.stdout, "next_step=implement gui system")
+	fmt.Fprintln(a.stdout, "next_step=prepare final report and presentation")
 }
 
 func (a App) createBlockchain(args []string) int {
@@ -599,5 +604,63 @@ func (a App) simulateDoubleSpend(args []string) int {
 
 	fmt.Fprintf(a.stdout, "first_tx=%s queued\n", firstTx.IDHex())
 	fmt.Fprintf(a.stdout, "second_tx=%s rejected=%v\n", secondTx.IDHex(), secondErr != nil)
+	return 0
+}
+
+func (a App) runPerformance(args []string) int {
+	lookups := 20
+	if len(args) > 1 {
+		fmt.Fprintln(a.stderr, "runperf accepts at most one argument: [lookups]")
+		return 1
+	}
+	if len(args) == 1 {
+		n, err := strconv.Atoi(args[0])
+		if err != nil || n <= 0 {
+			fmt.Fprintf(a.stderr, "parse lookups: %v\n", err)
+			return 1
+		}
+		lookups = n
+	}
+
+	wallets, err := wallet.NewWallets(a.cfg.DataDir)
+	if err != nil {
+		fmt.Fprintf(a.stderr, "load wallets: %v\n", err)
+		return 1
+	}
+	addresses := wallets.Addresses()
+	if len(addresses) == 0 {
+		fmt.Fprintln(a.stderr, "runperf requires at least one wallet address")
+		return 1
+	}
+
+	chain, err := blockchain.OpenBlockchain(a.cfg.DataDir)
+	if err != nil {
+		if errors.Is(err, blockchain.ErrBlockchainNotInitialized) {
+			fmt.Fprintln(a.stderr, "blockchain not initialized; run createblockchain first")
+			return 1
+		}
+		fmt.Fprintf(a.stderr, "open blockchain: %v\n", err)
+		return 1
+	}
+	defer chain.Close()
+
+	result, err := chain.RunBalanceBenchmark(addresses, lookups)
+	if err != nil {
+		fmt.Fprintf(a.stderr, "run benchmark: %v\n", err)
+		return 1
+	}
+	outputDir := os.Getenv(perfOutputDirEnv)
+	if outputDir == "" {
+		outputDir = "docs/perf"
+	}
+	if err := blockchain.WriteBalanceBenchmark(result, outputDir); err != nil {
+		fmt.Fprintf(a.stderr, "write benchmark files: %v\n", err)
+		return 1
+	}
+
+	fmt.Fprintf(a.stdout, "cached_ms=%.3f\n", result.CachedDurationMs)
+	fmt.Fprintf(a.stdout, "scan_ms=%.3f\n", result.FullScanDurationMs)
+	fmt.Fprintf(a.stdout, "speedup=%.3fx\n", result.Speedup)
+	fmt.Fprintf(a.stdout, "report=%s\n", filepath.Join(outputDir, "latest.md"))
 	return 0
 }
