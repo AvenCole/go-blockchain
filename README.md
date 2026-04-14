@@ -18,6 +18,7 @@
 - Plan 6：交易签名与验证，已完成
 - Plan 7：UTXO 缓存与查询优化，已完成
 - Plan 8：Merkle 树，已完成
+- Plan 9：工作量证明共识，已完成
 
 ## 仓库结构
 
@@ -97,6 +98,10 @@ go run ./cmd/go-blockchain doctor
 
 解释 Merkle 树如何落地，包括交易哈希叶子、奇数节点补齐、MerkleRoot 写入区块头以及完整性校验方式。
 
+### 11. `docs/plan/plan9.md`
+
+解释工作量证明如何落地，包括 Nonce、Difficulty、目标值判断、挖矿循环和区块校验方式。
+
 ## 开发原则
 
 1. 每个阶段先明确边界，再落地实现。
@@ -107,13 +112,13 @@ go run ./cmd/go-blockchain doctor
 
 ## 下一步
 
-当前将进入 Plan 9：工作量证明共识。
+当前将进入 Plan 10：交易池与经济模型。
 
 这个阶段会开始建立：
 
-1. Nonce
-2. Difficulty
-3. 挖矿循环
-4. 区块哈希目标校验
+1. Mempool
+2. Coinbase 正式奖励逻辑
+3. 手续费
+4. 更接近真实出块流程
 
 后续实现时会继续同步补充代码和文档。
