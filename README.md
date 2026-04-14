@@ -19,6 +19,7 @@
 - Plan 7：UTXO 缓存与查询优化，已完成
 - Plan 8：Merkle 树，已完成
 - Plan 9：工作量证明共识，已完成
+- Plan 10：交易池与经济模型，已完成
 
 ## 仓库结构
 
@@ -101,6 +102,10 @@ go run ./cmd/go-blockchain doctor
 ### 11. `docs/plan/plan9.md`
 
 解释工作量证明如何落地，包括 Nonce、Difficulty、目标值判断、挖矿循环和区块校验方式。
+
+### 12. `docs/plan/plan10.md`
+
+解释交易池与经济模型如何落地，包括 Mempool、手续费、coinbase 奖励、显式挖矿流程和 CLI 演示方式。
 
 ## 开发原则
 

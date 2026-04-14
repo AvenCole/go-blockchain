@@ -64,6 +64,10 @@ func (a App) Run(args []string) int {
 		return a.listAddresses(args[1:])
 	case "reindexutxo":
 		return a.reindexUTXO(args[1:])
+	case "mine":
+		return a.mine(args[1:])
+	case "printmempool":
+		return a.printMempool(args[1:])
 	default:
 		fmt.Fprintf(a.stderr, "unknown command: %s\n\n", args[0])
 		a.printHelp()
@@ -93,11 +97,13 @@ func (a App) printHelp() {
 	fmt.Fprintln(a.stdout, "  createblockchain [genesis-address]  Create a new blockchain")
 	fmt.Fprintln(a.stdout, "  addblock <label>                    Append a debug coinbase-style block")
 	fmt.Fprintln(a.stdout, "  printchain                       Print the blockchain from tip to genesis")
-	fmt.Fprintln(a.stdout, "  send <from> <to> <amount>           Add a signed UTXO-style transaction block")
+	fmt.Fprintln(a.stdout, "  send <from> <to> <amount> [fee]     Queue a signed transaction into the mempool")
 	fmt.Fprintln(a.stdout, "  getbalance <address>                Show the current UTXO balance for one address")
 	fmt.Fprintln(a.stdout, "  createwallet                     Create a new wallet and save it")
 	fmt.Fprintln(a.stdout, "  listaddresses                    List all saved wallet addresses")
 	fmt.Fprintln(a.stdout, "  reindexutxo                      Rebuild the cached UTXO set")
+	fmt.Fprintln(a.stdout, "  mine <miner-address>             Mine all pending transactions into a block")
+	fmt.Fprintln(a.stdout, "  printmempool                     List pending transaction IDs")
 }
 
 func (a App) printVersion() {
@@ -124,7 +130,7 @@ func (a App) printDoctor() {
 	fmt.Fprintf(a.stdout, "log_level=%s\n", a.cfg.LogLevel)
 	fmt.Fprintf(a.stdout, "network_mode=%s\n", a.cfg.NetworkMode)
 	fmt.Fprintf(a.stdout, "chain_status=%s\n", chainStatus)
-	fmt.Fprintln(a.stdout, "next_step=implement mempool and economic model")
+	fmt.Fprintln(a.stdout, "next_step=implement network simulation")
 }
 
 func (a App) createBlockchain(args []string) int {
@@ -244,8 +250,8 @@ func (a App) printChain(args []string) int {
 }
 
 func (a App) send(args []string) int {
-	if len(args) != 3 {
-		fmt.Fprintln(a.stderr, "send requires: <from> <to> <amount>")
+	if len(args) != 3 && len(args) != 4 {
+		fmt.Fprintln(a.stderr, "send requires: <from> <to> <amount> [fee]")
 		return 1
 	}
 	if !wallet.ValidateAddress(args[0]) || !wallet.ValidateAddress(args[1]) {
@@ -257,6 +263,14 @@ func (a App) send(args []string) int {
 	if err != nil {
 		fmt.Fprintf(a.stderr, "parse amount: %v\n", err)
 		return 1
+	}
+	fee := 0
+	if len(args) == 4 {
+		fee, err = strconv.Atoi(args[3])
+		if err != nil {
+			fmt.Fprintf(a.stderr, "parse fee: %v\n", err)
+			return 1
+		}
 	}
 
 	chain, err := blockchain.OpenBlockchain(a.cfg.DataDir)
@@ -283,13 +297,13 @@ func (a App) send(args []string) int {
 		return 1
 	}
 
-	block, tx, err := chain.SendTransaction(fromWallet, args[1], amount)
+	tx, err := chain.SendTransaction(fromWallet, args[1], amount, fee)
 	if err != nil {
 		fmt.Fprintf(a.stderr, "send transaction: %v\n", err)
 		return 1
 	}
 
-	fmt.Fprintf(a.stdout, "sent transaction txid=%s in block height=%d\n", tx.IDHex(), block.Height)
+	fmt.Fprintf(a.stdout, "queued transaction txid=%s fee=%d\n", tx.IDHex(), fee)
 	return 0
 }
 
@@ -397,5 +411,68 @@ func (a App) reindexUTXO(args []string) int {
 	}
 
 	fmt.Fprintln(a.stdout, "utxo set reindexed")
+	return 0
+}
+
+func (a App) mine(args []string) int {
+	if len(args) != 1 {
+		fmt.Fprintln(a.stderr, "mine requires: <miner-address>")
+		return 1
+	}
+	if !wallet.ValidateAddress(args[0]) {
+		fmt.Fprintln(a.stderr, "invalid miner address")
+		return 1
+	}
+
+	chain, err := blockchain.OpenBlockchain(a.cfg.DataDir)
+	if err != nil {
+		if errors.Is(err, blockchain.ErrBlockchainNotInitialized) {
+			fmt.Fprintln(a.stderr, "blockchain not initialized; run createblockchain first")
+			return 1
+		}
+		fmt.Fprintf(a.stderr, "open blockchain: %v\n", err)
+		return 1
+	}
+	defer chain.Close()
+
+	block, mined, err := chain.MineMempool(args[0])
+	if err != nil {
+		fmt.Fprintf(a.stderr, "mine mempool: %v\n", err)
+		return 1
+	}
+
+	fmt.Fprintf(a.stdout, "mined block height=%d txs=%d hash=%s\n", block.Height, mined, block.HashHex())
+	return 0
+}
+
+func (a App) printMempool(args []string) int {
+	if len(args) != 0 {
+		fmt.Fprintln(a.stderr, "printmempool does not accept extra arguments")
+		return 1
+	}
+
+	chain, err := blockchain.OpenBlockchain(a.cfg.DataDir)
+	if err != nil {
+		if errors.Is(err, blockchain.ErrBlockchainNotInitialized) {
+			fmt.Fprintln(a.stderr, "blockchain not initialized; run createblockchain first")
+			return 1
+		}
+		fmt.Fprintf(a.stderr, "open blockchain: %v\n", err)
+		return 1
+	}
+	defer chain.Close()
+
+	txs, err := chain.PendingTransactions()
+	if err != nil {
+		fmt.Fprintf(a.stderr, "read mempool: %v\n", err)
+		return 1
+	}
+	if len(txs) == 0 {
+		fmt.Fprintln(a.stdout, "mempool empty")
+		return 0
+	}
+	for _, tx := range txs {
+		fmt.Fprintln(a.stdout, tx.IDHex())
+	}
 	return 0
 }

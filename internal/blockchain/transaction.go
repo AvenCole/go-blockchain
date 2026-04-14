@@ -48,11 +48,16 @@ type CachedUTXO struct {
 
 // NewCoinbaseTransaction creates the prototype mining reward transaction.
 func NewCoinbaseTransaction(to, data string) Transaction {
+	return NewCoinbaseTransactionWithReward(to, data, subsidy)
+}
+
+// NewCoinbaseTransactionWithReward creates a mining reward transaction with a custom amount.
+func NewCoinbaseTransactionWithReward(to, data string, reward int) Transaction {
 	if data == "" {
 		data = fmt.Sprintf("reward to %s", to)
 	}
 
-	output, err := NewTXOutput(subsidy, to)
+	output, err := NewTXOutput(reward, to)
 	if err != nil {
 		panic(err)
 	}
@@ -73,7 +78,7 @@ func NewCoinbaseTransaction(to, data string) Transaction {
 }
 
 // NewUTXOTransaction creates a signed UTXO transaction from spendable outputs.
-func NewUTXOTransaction(fromWallet *wallet.Wallet, to string, amount int, bc *Blockchain) (Transaction, error) {
+func NewUTXOTransaction(fromWallet *wallet.Wallet, to string, amount int, fee int, bc *Blockchain) (Transaction, error) {
 	if fromWallet == nil {
 		return Transaction{}, fmt.Errorf("from wallet must not be nil")
 	}
@@ -83,14 +88,18 @@ func NewUTXOTransaction(fromWallet *wallet.Wallet, to string, amount int, bc *Bl
 	if amount <= 0 {
 		return Transaction{}, fmt.Errorf("amount must be positive")
 	}
+	if fee < 0 {
+		return Transaction{}, fmt.Errorf("fee must not be negative")
+	}
 
 	fromAddress := fromWallet.Address()
 	fromPubKeyHash := wallet.HashPublicKey(fromWallet.PublicKey)
-	accumulated, spendable, err := bc.FindSpendableOutputs(fromPubKeyHash, amount)
+	required := amount + fee
+	accumulated, spendable, err := bc.FindSpendableOutputs(fromPubKeyHash, required)
 	if err != nil {
 		return Transaction{}, err
 	}
-	if accumulated < amount {
+	if accumulated < required {
 		return Transaction{}, ErrInsufficientFunds
 	}
 
@@ -125,8 +134,8 @@ func NewUTXOTransaction(fromWallet *wallet.Wallet, to string, amount int, bc *Bl
 		return Transaction{}, err
 	}
 	outputs := []TXOutput{mainOutput}
-	if accumulated > amount {
-		changeOutput, err := NewTXOutput(accumulated-amount, fromAddress)
+	if accumulated > required {
+		changeOutput, err := NewTXOutput(accumulated-required, fromAddress)
 		if err != nil {
 			return Transaction{}, err
 		}
@@ -351,6 +360,28 @@ func (tx Transaction) TrimmedCopy() Transaction {
 // String formats the transaction for logging.
 func (tx Transaction) String() string {
 	return fmt.Sprintf("tx %s (inputs=%d outputs=%d)", tx.IDHex(), len(tx.Inputs), len(tx.Outputs))
+}
+
+// Fee computes the fee using referenced previous outputs.
+func (tx Transaction) Fee(prevTXs map[string]Transaction) int {
+	if tx.IsCoinbase() {
+		return 0
+	}
+
+	inputTotal := 0
+	for _, input := range tx.Inputs {
+		prevTx := prevTXs[input.TxIDHex()]
+		if input.Out >= 0 && input.Out < len(prevTx.Outputs) {
+			inputTotal += prevTx.Outputs[input.Out].Value
+		}
+	}
+
+	outputTotal := 0
+	for _, output := range tx.Outputs {
+		outputTotal += output.Value
+	}
+
+	return inputTotal - outputTotal
 }
 
 // AmountString is a small helper for CLI formatting.

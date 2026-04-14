@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 
 	"github.com/cockroachdb/pebble"
 
@@ -29,6 +30,7 @@ var (
 
 var lastHashKey = []byte("lh")
 var utxoPrefix = []byte("utxo-")
+var mempoolPrefix = []byte("mempool-")
 
 // Blockchain provides chain storage and append operations.
 type Blockchain struct {
@@ -150,6 +152,10 @@ func OpenBlockchain(dataDir string) (*Blockchain, error) {
 
 // AddBlock appends a new block to the tip of the chain.
 func (bc *Blockchain) AddBlock(transactions []Transaction) (*Block, error) {
+	return bc.commitBlock(transactions, nil)
+}
+
+func (bc *Blockchain) commitBlock(transactions []Transaction, mutateBatch func(*pebble.Batch) error) (*Block, error) {
 	for _, tx := range transactions {
 		if !bc.VerifyTransaction(tx) {
 			return nil, ErrInvalidTransaction
@@ -179,6 +185,11 @@ func (bc *Blockchain) AddBlock(transactions []Transaction) (*Block, error) {
 	if err := applyUTXOChanges(bc.db, batch, newBlock); err != nil {
 		return nil, err
 	}
+	if mutateBatch != nil {
+		if err := mutateBatch(batch); err != nil {
+			return nil, err
+		}
+	}
 	if err := batch.Commit(pebble.Sync); err != nil {
 		return nil, err
 	}
@@ -188,19 +199,58 @@ func (bc *Blockchain) AddBlock(transactions []Transaction) (*Block, error) {
 	return newBlock, nil
 }
 
-// SendTransaction creates a signed UTXO-style transaction and stores it in a new block.
-func (bc *Blockchain) SendTransaction(fromWallet *wallet.Wallet, to string, amount int) (*Block, Transaction, error) {
-	tx, err := NewUTXOTransaction(fromWallet, to, amount, bc)
+// SendTransaction creates a signed UTXO-style transaction and stores it in the mempool.
+func (bc *Blockchain) SendTransaction(fromWallet *wallet.Wallet, to string, amount int, fee int) (Transaction, error) {
+	tx, err := NewUTXOTransaction(fromWallet, to, amount, fee, bc)
 	if err != nil {
-		return nil, Transaction{}, err
+		return Transaction{}, err
 	}
 
-	block, err := bc.AddBlock([]Transaction{tx})
-	if err != nil {
-		return nil, Transaction{}, err
+	if err := bc.AddToMempool(tx); err != nil {
+		return Transaction{}, err
 	}
 
-	return block, tx, nil
+	return tx, nil
+}
+
+// MineMempool mines the current mempool into one new block with a coinbase reward.
+func (bc *Blockchain) MineMempool(minerAddress string) (*Block, int, error) {
+	transactions, err := bc.PendingTransactions()
+	if err != nil {
+		return nil, 0, err
+	}
+	if len(transactions) == 0 {
+		return nil, 0, fmt.Errorf("mempool is empty")
+	}
+
+	totalFees := 0
+	for _, tx := range transactions {
+		prevTXs := make(map[string]Transaction)
+		for _, input := range tx.Inputs {
+			prevTx, err := bc.FindTransaction(input.TxID)
+			if err != nil {
+				return nil, 0, err
+			}
+			prevTXs[input.TxIDHex()] = prevTx
+		}
+		totalFees += tx.Fee(prevTXs)
+	}
+
+	coinbase := NewCoinbaseTransactionWithReward(minerAddress, "mined block reward", subsidy+totalFees)
+	blockTransactions := append([]Transaction{coinbase}, transactions...)
+	block, err := bc.commitBlock(blockTransactions, func(batch *pebble.Batch) error {
+		for _, tx := range transactions {
+			if err := batch.Delete(mempoolKey(tx.ID), nil); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, 0, err
+	}
+
+	return block, len(transactions), nil
 }
 
 // CurrentBlock returns the tip block.
@@ -289,6 +339,53 @@ func (bc *Blockchain) VerifyTransaction(tx Transaction) bool {
 	}
 
 	return tx.Verify(prevTXs)
+}
+
+// AddToMempool stores one signed transaction in the mempool cache.
+func (bc *Blockchain) AddToMempool(tx Transaction) error {
+	if !bc.VerifyTransaction(tx) {
+		return ErrInvalidTransaction
+	}
+	if err := bc.ensureNoMempoolConflicts(tx); err != nil {
+		return err
+	}
+
+	encoded, err := tx.Serialize()
+	if err != nil {
+		return err
+	}
+
+	return bc.db.Set(mempoolKey(tx.ID), encoded, pebble.Sync)
+}
+
+// PendingTransactions returns the mempool contents sorted by txid.
+func (bc *Blockchain) PendingTransactions() ([]Transaction, error) {
+	iter, err := bc.db.NewIter(&pebble.IterOptions{
+		LowerBound: mempoolPrefix,
+		UpperBound: prefixUpperBound(mempoolPrefix),
+	})
+	if err != nil {
+		return nil, err
+	}
+	defer iter.Close()
+
+	var transactions []Transaction
+	for iter.First(); iter.Valid(); iter.Next() {
+		tx, err := DeserializeTransaction(iter.Value())
+		if err != nil {
+			return nil, err
+		}
+		transactions = append(transactions, tx.Clone())
+	}
+	if err := iter.Error(); err != nil {
+		return nil, err
+	}
+
+	sort.Slice(transactions, func(i, j int) bool {
+		return bytes.Compare(transactions[i].ID, transactions[j].ID) < 0
+	})
+
+	return transactions, nil
 }
 
 // BalanceOf computes the balance by summing unspent outputs.
@@ -525,6 +622,10 @@ func utxoKey(txID []byte) []byte {
 	return append(append([]byte(nil), utxoPrefix...), txID...)
 }
 
+func mempoolKey(txID []byte) []byte {
+	return append(append([]byte(nil), mempoolPrefix...), txID...)
+}
+
 func prefixUpperBound(prefix []byte) []byte {
 	upper := append([]byte(nil), prefix...)
 	upper[len(upper)-1]++
@@ -542,6 +643,25 @@ func (bc *Blockchain) hasUTXOEntries() (bool, error) {
 	defer iter.Close()
 
 	return iter.First(), nil
+}
+
+func (bc *Blockchain) ensureNoMempoolConflicts(tx Transaction) error {
+	pending, err := bc.PendingTransactions()
+	if err != nil {
+		return err
+	}
+
+	for _, existing := range pending {
+		for _, existingInput := range existing.Inputs {
+			for _, newInput := range tx.Inputs {
+				if bytes.Equal(existingInput.TxID, newInput.TxID) && existingInput.Out == newInput.Out {
+					return fmt.Errorf("mempool conflict on txid=%s out=%d", newInput.TxIDHex(), newInput.Out)
+				}
+			}
+		}
+	}
+
+	return nil
 }
 
 func applyUTXOChanges(db *pebble.DB, batch *pebble.Batch, block *Block) error {
