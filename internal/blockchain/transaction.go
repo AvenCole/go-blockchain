@@ -40,6 +40,12 @@ type TXOutput struct {
 	PubKeyHash []byte
 }
 
+// CachedUTXO keeps the original transaction output index alongside one output.
+type CachedUTXO struct {
+	Index  int
+	Output TXOutput
+}
+
 // NewCoinbaseTransaction creates the prototype mining reward transaction.
 func NewCoinbaseTransaction(to, data string) Transaction {
 	if data == "" {
@@ -383,4 +389,44 @@ func (in TXInput) FromDisplay() string {
 // Address renders one output as a wallet address string.
 func (out TXOutput) Address() string {
 	return wallet.AddressFromPubKeyHash(out.PubKeyHash)
+}
+
+func encodeOutputs(outputs []TXOutput) ([]byte, error) {
+	var result bytes.Buffer
+
+	if err := gob.NewEncoder(&result).Encode(outputs); err != nil {
+		return nil, err
+	}
+
+	return result.Bytes(), nil
+}
+
+func decodeOutputs(data []byte) ([]TXOutput, error) {
+	var outputs []TXOutput
+
+	if err := gob.NewDecoder(bytes.NewReader(data)).Decode(&outputs); err != nil {
+		return nil, err
+	}
+
+	return outputs, nil
+}
+
+func encodeCachedUTXOs(outputs []CachedUTXO) ([]byte, error) {
+	var result bytes.Buffer
+
+	if err := gob.NewEncoder(&result).Encode(outputs); err != nil {
+		return nil, err
+	}
+
+	return result.Bytes(), nil
+}
+
+func decodeCachedUTXOs(data []byte) ([]CachedUTXO, error) {
+	var outputs []CachedUTXO
+
+	if err := gob.NewDecoder(bytes.NewReader(data)).Decode(&outputs); err != nil {
+		return nil, err
+	}
+
+	return outputs, nil
 }

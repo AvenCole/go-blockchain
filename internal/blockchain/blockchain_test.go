@@ -197,6 +197,76 @@ func TestFindSpendableOutputsAndUTXO(t *testing.T) {
 	}
 }
 
+func TestReindexUTXOPreservesBalances(t *testing.T) {
+	dataDir := filepath.Join(t.TempDir(), "data")
+	miner := mustNewWallet(t)
+	alice := mustNewWallet(t)
+
+	created, err := CreateBlockchain(dataDir, miner.Address())
+	if err != nil {
+		t.Fatalf("CreateBlockchain() error = %v", err)
+	}
+	t.Cleanup(func() {
+		_ = created.Close()
+	})
+
+	if _, _, err := created.SendTransaction(miner, alice.Address(), 20); err != nil {
+		t.Fatalf("SendTransaction() error = %v", err)
+	}
+
+	if err := created.ReindexUTXO(); err != nil {
+		t.Fatalf("ReindexUTXO() error = %v", err)
+	}
+
+	minerBalance, err := created.BalanceOf(miner.Address())
+	if err != nil {
+		t.Fatalf("BalanceOf(miner) error = %v", err)
+	}
+	if minerBalance != 30 {
+		t.Fatalf("BalanceOf(miner) = %d, want 30", minerBalance)
+	}
+
+	aliceBalance, err := created.BalanceOf(alice.Address())
+	if err != nil {
+		t.Fatalf("BalanceOf(alice) error = %v", err)
+	}
+	if aliceBalance != 20 {
+		t.Fatalf("BalanceOf(alice) = %d, want 20", aliceBalance)
+	}
+}
+
+func TestSequentialSpendsWorkBeforeAndAfterReindex(t *testing.T) {
+	dataDir := filepath.Join(t.TempDir(), "data")
+	miner := mustNewWallet(t)
+	alice := mustNewWallet(t)
+
+	created, err := CreateBlockchain(dataDir, miner.Address())
+	if err != nil {
+		t.Fatalf("CreateBlockchain() error = %v", err)
+	}
+	t.Cleanup(func() {
+		_ = created.Close()
+	})
+
+	if _, _, err := created.SendTransaction(miner, alice.Address(), 20); err != nil {
+		t.Fatalf("miner -> alice failed: %v", err)
+	}
+	if _, _, err := created.SendTransaction(alice, miner.Address(), 10); err != nil {
+		t.Fatalf("alice -> miner failed: %v", err)
+	}
+	if _, _, err := created.SendTransaction(miner, alice.Address(), 35); err != nil {
+		t.Fatalf("miner -> alice 35 before reindex failed: %v", err)
+	}
+
+	if err := created.ReindexUTXO(); err != nil {
+		t.Fatalf("ReindexUTXO() error = %v", err)
+	}
+
+	if _, _, err := created.SendTransaction(miner, alice.Address(), 5); err != nil {
+		t.Fatalf("miner -> alice 5 after reindex failed: %v", err)
+	}
+}
+
 func TestVerifyTransactionRejectsTampering(t *testing.T) {
 	dataDir := filepath.Join(t.TempDir(), "data")
 	miner := mustNewWallet(t)

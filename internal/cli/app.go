@@ -62,6 +62,8 @@ func (a App) Run(args []string) int {
 		return a.createWallet(args[1:])
 	case "listaddresses":
 		return a.listAddresses(args[1:])
+	case "reindexutxo":
+		return a.reindexUTXO(args[1:])
 	default:
 		fmt.Fprintf(a.stderr, "unknown command: %s\n\n", args[0])
 		a.printHelp()
@@ -95,6 +97,7 @@ func (a App) printHelp() {
 	fmt.Fprintln(a.stdout, "  getbalance <address>                Show the current UTXO balance for one address")
 	fmt.Fprintln(a.stdout, "  createwallet                     Create a new wallet and save it")
 	fmt.Fprintln(a.stdout, "  listaddresses                    List all saved wallet addresses")
+	fmt.Fprintln(a.stdout, "  reindexutxo                      Rebuild the cached UTXO set")
 }
 
 func (a App) printVersion() {
@@ -121,7 +124,7 @@ func (a App) printDoctor() {
 	fmt.Fprintf(a.stdout, "log_level=%s\n", a.cfg.LogLevel)
 	fmt.Fprintf(a.stdout, "network_mode=%s\n", a.cfg.NetworkMode)
 	fmt.Fprintf(a.stdout, "chain_status=%s\n", chainStatus)
-	fmt.Fprintln(a.stdout, "next_step=implement UTXO cache")
+	fmt.Fprintln(a.stdout, "next_step=implement merkle tree")
 }
 
 func (a App) createBlockchain(args []string) int {
@@ -363,5 +366,32 @@ func (a App) listAddresses(args []string) int {
 		fmt.Fprintln(a.stdout, address)
 	}
 
+	return 0
+}
+
+func (a App) reindexUTXO(args []string) int {
+	if len(args) != 0 {
+		fmt.Fprintln(a.stderr, "reindexutxo does not accept extra arguments")
+		return 1
+	}
+
+	chain, err := blockchain.OpenBlockchain(a.cfg.DataDir)
+	if err != nil {
+		if errors.Is(err, blockchain.ErrBlockchainNotInitialized) {
+			fmt.Fprintln(a.stderr, "blockchain not initialized; run createblockchain first")
+			return 1
+		}
+
+		fmt.Fprintf(a.stderr, "open blockchain: %v\n", err)
+		return 1
+	}
+	defer chain.Close()
+
+	if err := chain.ReindexUTXO(); err != nil {
+		fmt.Fprintf(a.stderr, "reindex utxo: %v\n", err)
+		return 1
+	}
+
+	fmt.Fprintln(a.stdout, "utxo set reindexed")
 	return 0
 }
