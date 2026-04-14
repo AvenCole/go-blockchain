@@ -23,6 +23,9 @@ func (s *Service) Wallets() ([]WalletView, error) {
 	} else if err != nil {
 		return nil, err
 	}
+	if bc != nil {
+		defer bc.Close()
+	}
 	for _, address := range addresses {
 		balance := 0
 		if bc != nil {
@@ -33,8 +36,9 @@ func (s *Service) Wallets() ([]WalletView, error) {
 		}
 
 		views = append(views, WalletView{
-			Address: address,
-			Balance: balance,
+			Address:       address,
+			Balance:       balance,
+			LockingScript: mustLockingScriptString(address),
 		})
 	}
 
@@ -63,4 +67,12 @@ func (s *Service) CreateWallet() (string, error) {
 
 func (s *Service) loadWallets() (*wallet.Wallets, error) {
 	return wallet.NewWallets(s.cfg.DataDir)
+}
+
+func mustLockingScriptString(address string) string {
+	output, err := blockchain.NewTXOutput(0, address)
+	if err != nil {
+		return "(invalid script)"
+	}
+	return output.EffectiveScriptPubKey().String()
 }

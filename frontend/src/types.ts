@@ -13,22 +13,27 @@ export type DashboardData = {
 export type WalletView = {
   address: string
   balance: number
+  lockingScript: string
 }
 
 export type InputView = {
   txid: string
   out: number
   source: string
+  scriptSig: string
 }
 
 export type OutputView = {
   to: string
   value: number
+  scriptPubKey: string
 }
 
 export type TransactionView = {
   id: string
+  version: number
   fee: number
+  usesScriptVM: boolean
   inputs: InputView[]
   outputs: OutputView[]
 }

@@ -3,6 +3,7 @@ export namespace gui {
 	export class OutputView {
 	    to: string;
 	    value: number;
+	    scriptPubKey: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new OutputView(source);
@@ -12,12 +13,14 @@ export namespace gui {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.to = source["to"];
 	        this.value = source["value"];
+	        this.scriptPubKey = source["scriptPubKey"];
 	    }
 	}
 	export class InputView {
 	    txid: string;
 	    out: number;
 	    source: string;
+	    scriptSig: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new InputView(source);
@@ -28,11 +31,14 @@ export namespace gui {
 	        this.txid = source["txid"];
 	        this.out = source["out"];
 	        this.source = source["source"];
+	        this.scriptSig = source["scriptSig"];
 	    }
 	}
 	export class TransactionView {
 	    id: string;
+	    version: number;
 	    fee: number;
+	    usesScriptVM: boolean;
 	    inputs: InputView[];
 	    outputs: OutputView[];
 	
@@ -43,7 +49,9 @@ export namespace gui {
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.id = source["id"];
+	        this.version = source["version"];
 	        this.fee = source["fee"];
+	        this.usesScriptVM = source["usesScriptVM"];
 	        this.inputs = this.convertValues(source["inputs"], InputView);
 	        this.outputs = this.convertValues(source["outputs"], OutputView);
 	    }
@@ -148,6 +156,7 @@ export namespace gui {
 	export class WalletView {
 	    address: string;
 	    balance: number;
+	    lockingScript: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new WalletView(source);
@@ -157,6 +166,7 @@ export namespace gui {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.address = source["address"];
 	        this.balance = source["balance"];
+	        this.lockingScript = source["lockingScript"];
 	    }
 	}
 

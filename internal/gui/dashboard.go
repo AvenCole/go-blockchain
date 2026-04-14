@@ -24,6 +24,7 @@ func (s *Service) Dashboard() (DashboardData, error) {
 	if err != nil {
 		return DashboardData{}, err
 	}
+	defer bc.Close()
 	current, err := bc.CurrentBlock()
 	if err != nil {
 		return DashboardData{}, err

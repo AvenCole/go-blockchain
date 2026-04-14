@@ -8,17 +8,15 @@ import (
 	"strings"
 	"sync"
 
-	"go-blockchain/internal/blockchain"
 	"go-blockchain/internal/config"
 )
 
 const guiDataDirEnv = "GO_BLOCKCHAIN_GUI_DATA_DIR"
 
 type Service struct {
-	ctx   context.Context
-	cfg   config.Config
-	mu    sync.Mutex
-	chain *blockchain.Blockchain
+	ctx context.Context
+	cfg config.Config
+	mu  sync.Mutex
 }
 
 func NewService() *Service {
@@ -32,19 +30,6 @@ func NewService() *Service {
 
 func (s *Service) Startup(ctx context.Context) {
 	s.ctx = ctx
-}
-
-func (s *Service) ensureChain() (*blockchain.Blockchain, error) {
-	if s.chain != nil {
-		return s.chain, nil
-	}
-
-	chain, err := blockchain.OpenBlockchain(s.cfg.DataDir)
-	if err != nil {
-		return nil, normalizeStorageError(err)
-	}
-	s.chain = chain
-	return s.chain, nil
 }
 
 func resolveGUIDataDir(baseDataDir string) string {

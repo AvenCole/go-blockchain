@@ -13,8 +13,9 @@ type DashboardData struct {
 }
 
 type WalletView struct {
-	Address string `json:"address"`
-	Balance int    `json:"balance"`
+	Address       string `json:"address"`
+	Balance       int    `json:"balance"`
+	LockingScript string `json:"lockingScript"`
 }
 
 type BlockView struct {
@@ -31,19 +32,23 @@ type BlockView struct {
 }
 
 type TransactionView struct {
-	ID      string       `json:"id"`
-	Fee     int          `json:"fee"`
-	Inputs  []InputView  `json:"inputs"`
-	Outputs []OutputView `json:"outputs"`
+	ID           string       `json:"id"`
+	Version      int          `json:"version"`
+	Fee          int          `json:"fee"`
+	UsesScriptVM bool         `json:"usesScriptVM"`
+	Inputs       []InputView  `json:"inputs"`
+	Outputs      []OutputView `json:"outputs"`
 }
 
 type InputView struct {
-	TxID   string `json:"txid"`
-	Out    int    `json:"out"`
-	Source string `json:"source"`
+	TxID      string `json:"txid"`
+	Out       int    `json:"out"`
+	Source    string `json:"source"`
+	ScriptSig string `json:"scriptSig"`
 }
 
 type OutputView struct {
-	To    string `json:"to"`
-	Value int    `json:"value"`
+	To           string `json:"to"`
+	Value        int    `json:"value"`
+	ScriptPubKey string `json:"scriptPubKey"`
 }

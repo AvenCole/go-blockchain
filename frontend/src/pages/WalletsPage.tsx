@@ -35,6 +35,12 @@ function WalletsPage({ wallets, onCreateWallet }: WalletsPageProps) {
                     </Typography>
                     <Divider sx={{ my: 1.5 }} />
                     <Typography color="text.secondary">余额：{item.balance}</Typography>
+                    <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1 }}>
+                      P2PKH 脚本
+                    </Typography>
+                    <Typography variant="body2" sx={{ mt: 0.5, wordBreak: 'break-word', fontFamily: 'Consolas, monospace' }}>
+                      {item.lockingScript}
+                    </Typography>
                   </CardContent>
                 </Card>
               ))}
