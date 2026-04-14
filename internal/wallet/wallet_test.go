@@ -21,6 +21,15 @@ func TestCreateWalletAndValidateAddress(t *testing.T) {
 	if !ValidateAddress(address) {
 		t.Fatalf("ValidateAddress(%q) = false, want true", address)
 	}
+
+	hash, err := PublicKeyHashFromAddress(address)
+	if err != nil {
+		t.Fatalf("PublicKeyHashFromAddress() error = %v", err)
+	}
+
+	if !bytes.Equal(hash, HashPublicKey(wallet.PublicKey)) {
+		t.Fatalf("decoded hash mismatch")
+	}
 }
 
 func TestValidateAddressRejectsWrongVersionAndChecksum(t *testing.T) {

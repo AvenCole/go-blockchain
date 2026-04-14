@@ -52,8 +52,8 @@ func TestRunDoctor(t *testing.T) {
 		t.Fatalf("Run(doctor) exit code = %d, want 0", code)
 	}
 
-	if !strings.Contains(stdout.String(), "blockchain transaction demo is ready") {
-		t.Fatalf("doctor output missing readiness text: %q", stdout.String())
+	if !strings.Contains(stdout.String(), "next_step=implement UTXO cache") {
+		t.Fatalf("doctor output missing next step: %q", stdout.String())
 	}
 }
 
@@ -95,7 +95,14 @@ func TestCreateBlockchainAddBlockAndPrintChain(t *testing.T) {
 	var stderr bytes.Buffer
 	app := NewApp(cfg, &stdout, &stderr)
 
-	if code := app.Run([]string{"createblockchain", "genesis"}); code != 0 {
+	if code := app.Run([]string{"createwallet"}); code != 0 {
+		t.Fatalf("createwallet exit code = %d, stderr=%q", code, stderr.String())
+	}
+	address := strings.TrimPrefix(strings.TrimSpace(stdout.String()), "created wallet address=")
+	stdout.Reset()
+	stderr.Reset()
+
+	if code := app.Run([]string{"createblockchain", address}); code != 0 {
 		t.Fatalf("createblockchain exit code = %d, stderr=%q", code, stderr.String())
 	}
 
@@ -115,8 +122,7 @@ func TestCreateBlockchainAddBlockAndPrintChain(t *testing.T) {
 	if !strings.Contains(output, "Transactions: 1") {
 		t.Fatalf("printchain output missing transaction count: %q", output)
 	}
-
-	if !strings.Contains(output, "Output: to=system value=50") {
+	if !strings.Contains(output, "Output: to="+address+" value=50") {
 		t.Fatalf("printchain output missing debug coinbase output: %q", output)
 	}
 }
@@ -129,33 +135,45 @@ func TestRunSendAndGetBalance(t *testing.T) {
 	var stderr bytes.Buffer
 	app := NewApp(cfg, &stdout, &stderr)
 
-	if code := app.Run([]string{"createblockchain", "miner"}); code != 0 {
+	if code := app.Run([]string{"createwallet"}); code != 0 {
+		t.Fatalf("createwallet miner exit code = %d, stderr=%q", code, stderr.String())
+	}
+	miner := strings.TrimPrefix(strings.TrimSpace(stdout.String()), "created wallet address=")
+	stdout.Reset()
+	stderr.Reset()
+
+	if code := app.Run([]string{"createwallet"}); code != 0 {
+		t.Fatalf("createwallet alice exit code = %d, stderr=%q", code, stderr.String())
+	}
+	alice := strings.TrimPrefix(strings.TrimSpace(stdout.String()), "created wallet address=")
+	stdout.Reset()
+	stderr.Reset()
+
+	if code := app.Run([]string{"createblockchain", miner}); code != 0 {
 		t.Fatalf("createblockchain exit code = %d, stderr=%q", code, stderr.String())
 	}
 
 	stdout.Reset()
 	stderr.Reset()
-	if code := app.Run([]string{"send", "miner", "alice", "20"}); code != 0 {
+	if code := app.Run([]string{"send", miner, alice, "20"}); code != 0 {
 		t.Fatalf("send exit code = %d, stderr=%q", code, stderr.String())
 	}
 
 	stdout.Reset()
 	stderr.Reset()
-	if code := app.Run([]string{"getbalance", "alice"}); code != 0 {
+	if code := app.Run([]string{"getbalance", alice}); code != 0 {
 		t.Fatalf("getbalance exit code = %d, stderr=%q", code, stderr.String())
 	}
-
-	if !strings.Contains(stdout.String(), "balance[alice]=20") {
+	if !strings.Contains(stdout.String(), "balance["+alice+"]=20") {
 		t.Fatalf("getbalance output = %q, want alice balance", stdout.String())
 	}
 
 	stdout.Reset()
 	stderr.Reset()
-	if code := app.Run([]string{"getbalance", "miner"}); code != 0 {
+	if code := app.Run([]string{"getbalance", miner}); code != 0 {
 		t.Fatalf("getbalance miner exit code = %d, stderr=%q", code, stderr.String())
 	}
-
-	if !strings.Contains(stdout.String(), "balance[miner]=30") {
+	if !strings.Contains(stdout.String(), "balance["+miner+"]=30") {
 		t.Fatalf("getbalance miner output = %q, want miner balance", stdout.String())
 	}
 }
@@ -168,13 +186,27 @@ func TestSendInsufficientFunds(t *testing.T) {
 	var stderr bytes.Buffer
 	app := NewApp(cfg, &stdout, &stderr)
 
-	if code := app.Run([]string{"createblockchain", "miner"}); code != 0 {
+	if code := app.Run([]string{"createwallet"}); code != 0 {
+		t.Fatalf("createwallet miner exit code = %d, stderr=%q", code, stderr.String())
+	}
+	miner := strings.TrimPrefix(strings.TrimSpace(stdout.String()), "created wallet address=")
+	stdout.Reset()
+	stderr.Reset()
+
+	if code := app.Run([]string{"createwallet"}); code != 0 {
+		t.Fatalf("createwallet bob exit code = %d, stderr=%q", code, stderr.String())
+	}
+	bob := strings.TrimPrefix(strings.TrimSpace(stdout.String()), "created wallet address=")
+	stdout.Reset()
+	stderr.Reset()
+
+	if code := app.Run([]string{"createblockchain", miner}); code != 0 {
 		t.Fatalf("createblockchain exit code = %d, stderr=%q", code, stderr.String())
 	}
 
 	stdout.Reset()
 	stderr.Reset()
-	if code := app.Run([]string{"send", "alice", "bob", "10"}); code != 1 {
+	if code := app.Run([]string{"send", bob, miner, "60"}); code != 1 {
 		t.Fatalf("send insufficient funds exit code = %d, want 1", code)
 	}
 
