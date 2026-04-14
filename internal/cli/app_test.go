@@ -114,6 +114,15 @@ func TestCreateBlockchainAddBlockAndPrintChain(t *testing.T) {
 	if !strings.Contains(output, "Output: to="+address+" value=50") {
 		t.Fatalf("printchain output missing coinbase output: %q", output)
 	}
+	stdout.Reset()
+	stderr.Reset()
+
+	if code := app.Run([]string{"showevents", "5"}); code != 0 {
+		t.Fatalf("showevents exit code = %d, stderr=%q", code, stderr.String())
+	}
+	if !strings.Contains(stdout.String(), "kind=main_block") {
+		t.Fatalf("showevents output = %q, want main_block event", stdout.String())
+	}
 }
 
 func TestRunShowScript(t *testing.T) {

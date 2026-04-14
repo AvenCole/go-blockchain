@@ -126,6 +126,13 @@ go-blockchain
 
 当前网络层还支持孤儿块缓冲：当区块乱序到达时，可先缓存子块并等待父块补齐。
 
+当前最近链事件类型已经覆盖：
+
+1. genesis
+2. main_block
+3. fork_block
+4. reorg
+
 ## 7. GUI 模块
 
 GUI 使用：

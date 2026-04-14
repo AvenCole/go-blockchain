@@ -179,6 +179,14 @@ go run ./cmd/go-blockchain showevents 5
 3. 当父块到达后，孤儿块会被自动重试导入
 4. GUI 网络页还能看到当前 orphan 数量
 
+### 5.10 更细粒度的最近链事件
+
+讲解重点：
+
+1. 最近事件不只包含 reorg
+2. 还包含 genesis、main_block、fork_block
+3. 这样老师能看到系统正常增长、分叉暂存和重组切换的完整链行为
+
 ### 6. GUI 演示
 
 直接打开桌面程序：

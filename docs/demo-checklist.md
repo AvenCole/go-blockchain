@@ -47,6 +47,7 @@
 - [ ] Dashboard / 网络页能显示最近重组状态
 - [ ] Dashboard / 网络页能显示最近链事件列表
 - [ ] 网络页能显示 orphan 数量
+- [ ] 最近链事件中能看到 genesis / main_block / fork_block / reorg
 - [ ] 浅色/深色模式切换正常
 
 ## 五、网络演示检查

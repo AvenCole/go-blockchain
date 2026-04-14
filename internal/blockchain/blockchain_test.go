@@ -80,6 +80,20 @@ func TestCreateBlockchainAndIterate(t *testing.T) {
 	if minedTx.Outputs[0].EffectiveScriptPubKey().IsEmpty() {
 		t.Fatalf("tx scriptPubKey missing")
 	}
+
+	events, err := created.RecentChainEvents(5)
+	if err != nil {
+		t.Fatalf("RecentChainEvents() error = %v", err)
+	}
+	if len(events) < 2 {
+		t.Fatalf("len(events) = %d, want at least 2", len(events))
+	}
+	if events[0].Kind != "main_block" {
+		t.Fatalf("events[0].Kind = %q, want main_block", events[0].Kind)
+	}
+	if events[1].Kind != "genesis" {
+		t.Fatalf("events[1].Kind = %q, want genesis", events[1].Kind)
+	}
 }
 
 func TestOpenBlockchain(t *testing.T) {
@@ -501,6 +515,27 @@ func TestImportBlockSwitchesToLongerFork(t *testing.T) {
 	}
 	if allBlocks[0].Height != 3 || allBlocks[1].Height != 2 || allBlocks[2].Height != 1 || allBlocks[3].Height != 0 {
 		t.Fatalf("unexpected branch heights after switch")
+	}
+
+	events, err := created.RecentChainEvents(10)
+	if err != nil {
+		t.Fatalf("RecentChainEvents() error = %v", err)
+	}
+	foundForkStore := false
+	foundReorg := false
+	for _, event := range events {
+		if event.Kind == "fork_block" {
+			foundForkStore = true
+		}
+		if event.Kind == "reorg" {
+			foundReorg = true
+		}
+	}
+	if !foundForkStore {
+		t.Fatalf("expected fork_block event in recent history")
+	}
+	if !foundReorg {
+		t.Fatalf("expected reorg event in recent history")
 	}
 }
 

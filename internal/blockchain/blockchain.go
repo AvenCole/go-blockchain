@@ -146,6 +146,16 @@ func CreateBlockchain(dataDir string, genesisAddress string) (*Blockchain, error
 		tip:     genesis.Hash,
 		db:      db,
 	}
+	if err := bc.appendChainEvent(ChainEvent{
+		Timestamp: time.Now().UTC().Format(time.RFC3339),
+		Kind:      "genesis",
+		Summary:   fmt.Sprintf("genesis created height=0 tip=%s", genesis.HashHex()),
+		NewHeight: 0,
+		NewTip:    genesis.HashHex(),
+	}); err != nil {
+		_ = bc.Close()
+		return nil, err
+	}
 
 	return bc, nil
 }
@@ -235,6 +245,15 @@ func (bc *Blockchain) commitBlock(transactions []Transaction, mutateBatch func(*
 	}
 
 	bc.tip = newBlock.Hash
+	if err := bc.appendChainEvent(ChainEvent{
+		Timestamp: time.Now().UTC().Format(time.RFC3339),
+		Kind:      "main_block",
+		Summary:   fmt.Sprintf("main block height=%d txs=%d tip=%s", newBlock.Height, len(newBlock.Transactions), newBlock.HashHex()),
+		NewHeight: newBlock.Height,
+		NewTip:    newBlock.HashHex(),
+	}); err != nil {
+		return nil, err
+	}
 
 	return newBlock, nil
 }
@@ -530,6 +549,16 @@ func (bc *Blockchain) ImportBlock(block *Block) error {
 
 	if block.Height > current.Height {
 		return bc.switchTip(block.Hash)
+	}
+
+	if err := bc.appendChainEvent(ChainEvent{
+		Timestamp: time.Now().UTC().Format(time.RFC3339),
+		Kind:      "fork_block",
+		Summary:   fmt.Sprintf("side branch block stored height=%d hash=%s", block.Height, block.HashHex()),
+		NewHeight: block.Height,
+		NewTip:    block.HashHex(),
+	}); err != nil {
+		return err
 	}
 
 	return nil
