@@ -14,9 +14,11 @@ import (
 const guiDataDirEnv = "GO_BLOCKCHAIN_GUI_DATA_DIR"
 
 type Service struct {
-	ctx context.Context
-	cfg config.Config
-	mu  sync.Mutex
+	ctx    context.Context
+	cfg    config.Config
+	mu     sync.Mutex
+	nodeMu sync.Mutex
+	nodes  map[string]*nodeSession
 }
 
 func NewService() *Service {
@@ -24,7 +26,8 @@ func NewService() *Service {
 	cfg.DataDir = resolveGUIDataDir(cfg.DataDir)
 
 	return &Service{
-		cfg: cfg,
+		cfg:   cfg,
+		nodes: make(map[string]*nodeSession),
 	}
 }
 

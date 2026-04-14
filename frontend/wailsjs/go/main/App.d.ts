@@ -4,14 +4,24 @@ import {gui} from '../models';
 
 export function Blocks():Promise<Array<gui.BlockView>>;
 
+export function ConnectNode(arg1:string,arg2:string):Promise<void>;
+
 export function CreateWallet():Promise<string>;
 
 export function Dashboard():Promise<gui.DashboardData>;
 
+export function ExecuteCLI(arg1:string):Promise<gui.CommandResult>;
+
 export function MinePending(arg1:string):Promise<string>;
+
+export function Nodes():Promise<Array<gui.NodeStatus>>;
 
 export function PendingTransactions():Promise<Array<string>>;
 
 export function QueueTransaction(arg1:string,arg2:string,arg3:number,arg4:number):Promise<string>;
+
+export function StartNode(arg1:string,arg2:string,arg3:string):Promise<string>;
+
+export function StopNode(arg1:string):Promise<void>;
 
 export function Wallets():Promise<Array<gui.WalletView>>;

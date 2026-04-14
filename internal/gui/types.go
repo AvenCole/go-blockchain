@@ -52,3 +52,18 @@ type OutputView struct {
 	Value        int    `json:"value"`
 	ScriptPubKey string `json:"scriptPubKey"`
 }
+
+type CommandResult struct {
+	Command  string `json:"command"`
+	Stdout   string `json:"stdout"`
+	Stderr   string `json:"stderr"`
+	ExitCode int    `json:"exitCode"`
+}
+
+type NodeStatus struct {
+	Address      string   `json:"address"`
+	MinerAddress string   `json:"minerAddress"`
+	Peers        []string `json:"peers"`
+	Height       int      `json:"height"`
+	Running      bool     `json:"running"`
+}

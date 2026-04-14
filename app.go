@@ -47,3 +47,23 @@ func (a *App) QueueTransaction(from, to string, amount int, fee int) (string, er
 func (a *App) MinePending(minerAddress string) (string, error) {
 	return a.service.MinePending(minerAddress)
 }
+
+func (a *App) ExecuteCLI(commandLine string) (gui.CommandResult, error) {
+	return a.service.ExecuteCLI(commandLine)
+}
+
+func (a *App) StartNode(address, seed, miner string) (string, error) {
+	return a.service.StartNode(address, seed, miner)
+}
+
+func (a *App) StopNode(address string) error {
+	return a.service.StopNode(address)
+}
+
+func (a *App) Nodes() ([]gui.NodeStatus, error) {
+	return a.service.Nodes()
+}
+
+func (a *App) ConnectNode(address, seed string) error {
+	return a.service.ConnectNode(address, seed)
+}
