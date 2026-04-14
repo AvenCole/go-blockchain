@@ -70,6 +70,13 @@ GUI 默认使用独立数据目录：
 
 - `GO_BLOCKCHAIN_GUI_DATA_DIR`
 
+GUI 分支当前额外提供更接近 Bitcoin 客户端的桌面能力：
+
+- 左侧工作台导航
+- Dashboard / 钱包 / 区块 / 交易与挖矿页面
+- 网络页面：启动节点、连接 seed、查看 peers
+- 控制台页面：在 GUI 中直接执行 CLI 命令并查看输出
+
 ## 文档怎么读
 
 ### 1. `docs/task.md`

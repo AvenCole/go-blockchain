@@ -45,3 +45,18 @@ export type BlockView = {
   transactionCount: number
   transactions: TransactionView[]
 }
+
+export type CommandResult = {
+  command: string
+  stdout: string
+  stderr: string
+  exitCode: number
+}
+
+export type NodeStatus = {
+  address: string
+  minerAddress: string
+  peers: string[]
+  height: number
+  running: boolean
+}

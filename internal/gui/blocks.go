@@ -17,6 +17,7 @@ func (s *Service) Blocks() ([]BlockView, error) {
 	if err != nil {
 		return nil, err
 	}
+	defer bc.Close()
 	blocks, err := bc.Blocks()
 	if err != nil {
 		return nil, err

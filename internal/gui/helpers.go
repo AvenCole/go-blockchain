@@ -9,7 +9,11 @@ import (
 )
 
 func (s *Service) openBlockchain() (*blockchain.Blockchain, error) {
-	return s.ensureChain()
+	bc, err := blockchain.OpenBlockchain(s.cfg.DataDir)
+	if err != nil {
+		return nil, normalizeStorageError(err)
+	}
+	return bc, nil
 }
 
 func (s *Service) isValidAddress(address string) bool {

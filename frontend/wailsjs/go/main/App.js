@@ -6,6 +6,10 @@ export function Blocks() {
   return window['go']['main']['App']['Blocks']();
 }
 
+export function ConnectNode(arg1, arg2) {
+  return window['go']['main']['App']['ConnectNode'](arg1, arg2);
+}
+
 export function CreateWallet() {
   return window['go']['main']['App']['CreateWallet']();
 }
@@ -14,8 +18,16 @@ export function Dashboard() {
   return window['go']['main']['App']['Dashboard']();
 }
 
+export function ExecuteCLI(arg1) {
+  return window['go']['main']['App']['ExecuteCLI'](arg1);
+}
+
 export function MinePending(arg1) {
   return window['go']['main']['App']['MinePending'](arg1);
+}
+
+export function Nodes() {
+  return window['go']['main']['App']['Nodes']();
 }
 
 export function PendingTransactions() {
@@ -24,6 +36,14 @@ export function PendingTransactions() {
 
 export function QueueTransaction(arg1, arg2, arg3, arg4) {
   return window['go']['main']['App']['QueueTransaction'](arg1, arg2, arg3, arg4);
+}
+
+export function StartNode(arg1, arg2, arg3) {
+  return window['go']['main']['App']['StartNode'](arg1, arg2, arg3);
+}
+
+export function StopNode(arg1) {
+  return window['go']['main']['App']['StopNode'](arg1);
 }
 
 export function Wallets() {

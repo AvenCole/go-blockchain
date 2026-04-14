@@ -114,6 +114,24 @@ export namespace gui {
 		    return a;
 		}
 	}
+	export class CommandResult {
+	    command: string;
+	    stdout: string;
+	    stderr: string;
+	    exitCode: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new CommandResult(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.command = source["command"];
+	        this.stdout = source["stdout"];
+	        this.stderr = source["stderr"];
+	        this.exitCode = source["exitCode"];
+	    }
+	}
 	export class DashboardData {
 	    height: number;
 	    latestHash: string;
@@ -143,6 +161,26 @@ export namespace gui {
 	    }
 	}
 	
+	export class NodeStatus {
+	    address: string;
+	    minerAddress: string;
+	    peers: string[];
+	    height: number;
+	    running: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new NodeStatus(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.address = source["address"];
+	        this.minerAddress = source["minerAddress"];
+	        this.peers = source["peers"];
+	        this.height = source["height"];
+	        this.running = source["running"];
+	    }
+	}
 	
 	
 	export class WalletView {

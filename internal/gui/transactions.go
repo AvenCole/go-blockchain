@@ -18,6 +18,7 @@ func (s *Service) PendingTransactions() ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
+	defer bc.Close()
 	txs, err := bc.PendingTransactions()
 	if err != nil {
 		return nil, err
@@ -43,6 +44,7 @@ func (s *Service) QueueTransaction(from, to string, amount int, fee int) (string
 	if err != nil {
 		return "", friendlyGUIError(err)
 	}
+	defer bc.Close()
 
 	wallets, err := s.loadWallets()
 	if err != nil {
@@ -73,6 +75,7 @@ func (s *Service) MinePending(minerAddress string) (string, error) {
 	if err != nil {
 		return "", friendlyGUIError(err)
 	}
+	defer bc.Close()
 
 	block, _, err := bc.MineMempool(minerAddress)
 	if err != nil {

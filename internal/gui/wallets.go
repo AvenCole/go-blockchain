@@ -23,6 +23,9 @@ func (s *Service) Wallets() ([]WalletView, error) {
 	} else if err != nil {
 		return nil, err
 	}
+	if bc != nil {
+		defer bc.Close()
+	}
 	for _, address := range addresses {
 		balance := 0
 		if bc != nil {
