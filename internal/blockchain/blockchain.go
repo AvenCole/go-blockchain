@@ -28,6 +28,8 @@ var (
 	ErrInvalidTransaction = errors.New("invalid transaction")
 	// ErrInvalidBlock reports one invalid received block.
 	ErrInvalidBlock = errors.New("invalid block")
+	// ErrDoubleSpend reports that one output is being spent twice.
+	ErrDoubleSpend = errors.New("double spend detected")
 )
 
 var lastHashKey = []byte("lh")
@@ -159,8 +161,8 @@ func (bc *Blockchain) AddBlock(transactions []Transaction) (*Block, error) {
 
 func (bc *Blockchain) commitBlock(transactions []Transaction, mutateBatch func(*pebble.Batch) error) (*Block, error) {
 	for _, tx := range transactions {
-		if !bc.VerifyTransaction(tx) {
-			return nil, ErrInvalidTransaction
+		if err := bc.ValidateTransaction(tx); err != nil {
+			return nil, err
 		}
 	}
 
@@ -170,6 +172,9 @@ func (bc *Blockchain) commitBlock(transactions []Transaction, mutateBatch func(*
 	}
 
 	newBlock := NewBlock(transactions, bc.tip, lastBlock.Height+1)
+	if err := bc.ValidateBlock(newBlock); err != nil {
+		return nil, err
+	}
 	encodedBlock, err := newBlock.Serialize()
 	if err != nil {
 		return nil, err
@@ -369,18 +374,83 @@ func (bc *Blockchain) VerifyTransaction(tx Transaction) bool {
 	return tx.Verify(prevTXs)
 }
 
-// ImportBlock stores an externally received block if it cleanly extends the tip.
-func (bc *Blockchain) ImportBlock(block *Block) error {
+// ValidateTransaction performs full transaction safety checks for the current chain state.
+func (bc *Blockchain) ValidateTransaction(tx Transaction) error {
+	if tx.IsCoinbase() {
+		return nil
+	}
+	if !bc.VerifyTransaction(tx) {
+		return ErrInvalidTransaction
+	}
+
+	seen := make(map[string]struct{})
+	for _, input := range tx.Inputs {
+		key := fmt.Sprintf("%s:%d", input.TxIDHex(), input.Out)
+		if _, exists := seen[key]; exists {
+			return ErrDoubleSpend
+		}
+		seen[key] = struct{}{}
+
+		ok, err := bc.outputAvailable(input.TxID, input.Out)
+		if err != nil {
+			return err
+		}
+		if !ok {
+			return ErrDoubleSpend
+		}
+	}
+
+	return nil
+}
+
+// ValidateBlock checks block integrity and rejects duplicate spends inside one block.
+func (bc *Blockchain) ValidateBlock(block *Block) error {
 	if block == nil {
 		return ErrInvalidBlock
 	}
 	if !block.VerifyMerkleRoot() || !block.VerifyProofOfWork() {
 		return ErrInvalidBlock
 	}
-	for _, tx := range block.Transactions {
-		if !bc.VerifyTransaction(tx) {
-			return ErrInvalidTransaction
+	if len(block.Transactions) == 0 {
+		return ErrInvalidBlock
+	}
+
+	coinbaseCount := 0
+	spent := make(map[string]struct{})
+	for idx, tx := range block.Transactions {
+		if tx.IsCoinbase() {
+			coinbaseCount++
+			if idx != 0 {
+				return ErrInvalidBlock
+			}
+			continue
 		}
+
+		if err := bc.ValidateTransaction(tx); err != nil {
+			return err
+		}
+		for _, input := range tx.Inputs {
+			key := fmt.Sprintf("%s:%d", input.TxIDHex(), input.Out)
+			if _, exists := spent[key]; exists {
+				return ErrDoubleSpend
+			}
+			spent[key] = struct{}{}
+		}
+	}
+	if coinbaseCount != 1 {
+		return ErrInvalidBlock
+	}
+
+	return nil
+}
+
+// ImportBlock stores an externally received block if it cleanly extends the tip.
+func (bc *Blockchain) ImportBlock(block *Block) error {
+	if block == nil {
+		return ErrInvalidBlock
+	}
+	if err := bc.ValidateBlock(block); err != nil {
+		return err
 	}
 
 	current, err := bc.CurrentBlock()
@@ -422,8 +492,8 @@ func (bc *Blockchain) ImportBlock(block *Block) error {
 
 // AddToMempool stores one signed transaction in the mempool cache.
 func (bc *Blockchain) AddToMempool(tx Transaction) error {
-	if !bc.VerifyTransaction(tx) {
-		return ErrInvalidTransaction
+	if err := bc.ValidateTransaction(tx); err != nil {
+		return err
 	}
 	if err := bc.ensureNoMempoolConflicts(tx); err != nil {
 		return err
@@ -717,6 +787,27 @@ func deleteMempoolTransactions(batch *pebble.Batch, transactions []Transaction) 
 	return nil
 }
 
+func (bc *Blockchain) outputAvailable(txID []byte, out int) (bool, error) {
+	encoded, err := loadValue(bc.db, utxoKey(txID))
+	if err != nil {
+		if errors.Is(err, pebble.ErrNotFound) {
+			return false, nil
+		}
+		return false, err
+	}
+
+	cached, err := decodeCachedUTXOs(encoded)
+	if err != nil {
+		return false, err
+	}
+	for _, item := range cached {
+		if item.Index == out {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
 func prefixUpperBound(prefix []byte) []byte {
 	upper := append([]byte(nil), prefix...)
 	upper[len(upper)-1]++
@@ -835,9 +926,6 @@ func ImportBlockToDir(dataDir string, block *Block) error {
 	if block == nil {
 		return ErrInvalidBlock
 	}
-	if !block.VerifyMerkleRoot() || !block.VerifyProofOfWork() {
-		return ErrInvalidBlock
-	}
 
 	exists, err := ChainExists(dataDir)
 	if err != nil {
@@ -845,8 +933,11 @@ func ImportBlockToDir(dataDir string, block *Block) error {
 	}
 
 	if !exists {
-		if block.Height != 0 {
-			return ErrBlockchainNotInitialized
+		if block.Height != 0 || !block.VerifyMerkleRoot() || !block.VerifyProofOfWork() {
+			return ErrInvalidBlock
+		}
+		if len(block.Transactions) != 1 || !block.Transactions[0].IsCoinbase() {
+			return ErrInvalidBlock
 		}
 		db, err := openDB(dataDir)
 		if err != nil {
@@ -877,6 +968,9 @@ func ImportBlockToDir(dataDir string, block *Block) error {
 		return err
 	}
 	defer bc.Close()
+	if err := bc.ValidateBlock(block); err != nil {
+		return err
+	}
 	return bc.ImportBlock(block)
 }
 

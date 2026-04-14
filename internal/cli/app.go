@@ -75,6 +75,8 @@ func (a App) Run(args []string) int {
 		return a.printMempool(args[1:])
 	case "startnode":
 		return a.startNode(args[1:])
+	case "simdouble":
+		return a.simulateDoubleSpend(args[1:])
 	default:
 		fmt.Fprintf(a.stderr, "unknown command: %s\n\n", args[0])
 		a.printHelp()
@@ -112,6 +114,7 @@ func (a App) printHelp() {
 	fmt.Fprintln(a.stdout, "  startnode <addr> [seed] [miner]  Start one local network node")
 	fmt.Fprintln(a.stdout, "  mine <miner-address>             Mine all pending transactions into a block")
 	fmt.Fprintln(a.stdout, "  printmempool                     List pending transaction IDs")
+	fmt.Fprintln(a.stdout, "  simdouble <from> <to1> <to2> <amount> [fee]  Demonstrate double-spend rejection")
 }
 
 func (a App) printVersion() {
@@ -138,7 +141,7 @@ func (a App) printDoctor() {
 	fmt.Fprintf(a.stdout, "log_level=%s\n", a.cfg.LogLevel)
 	fmt.Fprintf(a.stdout, "network_mode=%s\n", a.cfg.NetworkMode)
 	fmt.Fprintf(a.stdout, "chain_status=%s\n", chainStatus)
-	fmt.Fprintln(a.stdout, "next_step=implement network simulation")
+	fmt.Fprintln(a.stdout, "next_step=implement gui system")
 }
 
 func (a App) createBlockchain(args []string) int {
@@ -529,5 +532,72 @@ func (a App) startNode(args []string) int {
 		return 1
 	}
 
+	return 0
+}
+
+func (a App) simulateDoubleSpend(args []string) int {
+	if len(args) != 4 && len(args) != 5 {
+		fmt.Fprintln(a.stderr, "simdouble requires: <from> <to1> <to2> <amount> [fee]")
+		return 1
+	}
+	if !wallet.ValidateAddress(args[0]) || !wallet.ValidateAddress(args[1]) || !wallet.ValidateAddress(args[2]) {
+		fmt.Fprintln(a.stderr, "simdouble requires valid wallet addresses")
+		return 1
+	}
+
+	amount, err := strconv.Atoi(args[3])
+	if err != nil {
+		fmt.Fprintf(a.stderr, "parse amount: %v\n", err)
+		return 1
+	}
+	fee := 0
+	if len(args) == 5 {
+		fee, err = strconv.Atoi(args[4])
+		if err != nil {
+			fmt.Fprintf(a.stderr, "parse fee: %v\n", err)
+			return 1
+		}
+	}
+
+	chain, err := blockchain.OpenBlockchain(a.cfg.DataDir)
+	if err != nil {
+		if errors.Is(err, blockchain.ErrBlockchainNotInitialized) {
+			fmt.Fprintln(a.stderr, "blockchain not initialized; run createblockchain first")
+			return 1
+		}
+		fmt.Fprintf(a.stderr, "open blockchain: %v\n", err)
+		return 1
+	}
+	defer chain.Close()
+
+	wallets, err := wallet.NewWallets(a.cfg.DataDir)
+	if err != nil {
+		fmt.Fprintf(a.stderr, "load wallets: %v\n", err)
+		return 1
+	}
+	fromWallet, ok := wallets.GetWallet(args[0])
+	if !ok {
+		fmt.Fprintln(a.stderr, "sender wallet not found")
+		return 1
+	}
+
+	firstTx, err := chain.SendTransaction(fromWallet, args[1], amount, fee)
+	if err != nil {
+		fmt.Fprintf(a.stderr, "queue first tx: %v\n", err)
+		return 1
+	}
+	secondTx, err := blockchain.NewUTXOTransaction(fromWallet, args[2], amount, fee, chain)
+	if err != nil {
+		fmt.Fprintf(a.stderr, "build second tx: %v\n", err)
+		return 1
+	}
+	secondErr := chain.AddToMempool(secondTx)
+	if !errors.Is(secondErr, blockchain.ErrDoubleSpend) && (secondErr == nil || !strings.Contains(secondErr.Error(), "mempool conflict")) {
+		fmt.Fprintf(a.stderr, "double-spend simulation expected rejection, got: %v\n", secondErr)
+		return 1
+	}
+
+	fmt.Fprintf(a.stdout, "first_tx=%s queued\n", firstTx.IDHex())
+	fmt.Fprintf(a.stdout, "second_tx=%s rejected=%v\n", secondTx.IDHex(), secondErr != nil)
 	return 0
 }

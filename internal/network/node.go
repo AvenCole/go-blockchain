@@ -21,8 +21,9 @@ type Node struct {
 	DataDir      string
 	MinerAddress string
 
-	mu    sync.RWMutex
-	peers map[string]struct{}
+	mu      sync.RWMutex
+	chainMu sync.Mutex
+	peers   map[string]struct{}
 }
 
 // NewNode creates a network node with one listening address and local chain path.
@@ -81,7 +82,9 @@ func (n *Node) Listen(ctx context.Context) error {
 // Connect sends a version handshake to one peer.
 func (n *Node) Connect(peer string) error {
 	n.addPeer(peer)
+	n.chainMu.Lock()
 	height, err := blockchain.BestHeight(n.DataDir)
+	n.chainMu.Unlock()
 	if err != nil {
 		return err
 	}
@@ -106,6 +109,9 @@ func (n *Node) KnownPeers() []string {
 
 // SubmitTransaction creates one local transaction and broadcasts it.
 func (n *Node) SubmitTransaction(from *wallet.Wallet, to string, amount int, fee int) (blockchain.Transaction, error) {
+	n.chainMu.Lock()
+	defer n.chainMu.Unlock()
+
 	bc, err := blockchain.OpenBlockchain(n.DataDir)
 	if err != nil {
 		return blockchain.Transaction{}, err
@@ -130,6 +136,9 @@ func (n *Node) MinePending() (*blockchain.Block, error) {
 	if n.MinerAddress == "" {
 		return nil, fmt.Errorf("miner address not configured")
 	}
+
+	n.chainMu.Lock()
+	defer n.chainMu.Unlock()
 
 	bc, err := blockchain.OpenBlockchain(n.DataDir)
 	if err != nil {
@@ -202,7 +211,9 @@ func (n *Node) handleVersion(msg versionMessage) error {
 	n.addPeer(msg.From)
 	_ = n.send(msg.From, "addr", addrMessage{From: n.Address, Peers: n.KnownPeers()})
 
+	n.chainMu.Lock()
 	localHeight, err := blockchain.BestHeight(n.DataDir)
+	n.chainMu.Unlock()
 	if err != nil {
 		return err
 	}
@@ -229,9 +240,12 @@ func (n *Node) handleGetBlocks(msg getBlocksMessage) error {
 }
 
 func (n *Node) handleBlocks(msg blocksMessage) error {
+	n.chainMu.Lock()
+	defer n.chainMu.Unlock()
+
 	for _, block := range msg.Blocks {
 		blockCopy := block
-		if err := blockchain.ImportBlockToDir(n.DataDir, &blockCopy); err != nil && !errors.Is(err, blockchain.ErrInvalidBlock) {
+		if err := blockchain.ImportBlockToDir(n.DataDir, &blockCopy); err != nil && !errors.Is(err, blockchain.ErrInvalidBlock) && !errors.Is(err, blockchain.ErrDoubleSpend) && !errors.Is(err, blockchain.ErrInvalidTransaction) {
 			return err
 		}
 	}
@@ -240,6 +254,9 @@ func (n *Node) handleBlocks(msg blocksMessage) error {
 
 func (n *Node) handleTx(msg txMessage) error {
 	n.addPeer(msg.From)
+
+	n.chainMu.Lock()
+	defer n.chainMu.Unlock()
 
 	bc, err := blockchain.OpenBlockchain(n.DataDir)
 	if err != nil {
@@ -260,9 +277,12 @@ func (n *Node) handleTx(msg txMessage) error {
 
 func (n *Node) handleBlock(msg blockMessage) error {
 	n.addPeer(msg.From)
+	n.chainMu.Lock()
+	defer n.chainMu.Unlock()
+
 	blockCopy := msg.Block
 	if err := blockchain.ImportBlockToDir(n.DataDir, &blockCopy); err != nil {
-		if errors.Is(err, blockchain.ErrInvalidBlock) || errors.Is(err, blockchain.ErrBlockchainNotInitialized) {
+		if errors.Is(err, blockchain.ErrInvalidBlock) || errors.Is(err, blockchain.ErrBlockchainNotInitialized) || errors.Is(err, blockchain.ErrDoubleSpend) || errors.Is(err, blockchain.ErrInvalidTransaction) {
 			return nil
 		}
 		return err
@@ -273,6 +293,9 @@ func (n *Node) handleBlock(msg blockMessage) error {
 }
 
 func (n *Node) sendBlocks(peer string, fromHeight int) error {
+	n.chainMu.Lock()
+	defer n.chainMu.Unlock()
+
 	bc, err := blockchain.OpenBlockchain(n.DataDir)
 	if err != nil {
 		if errors.Is(err, blockchain.ErrBlockchainNotInitialized) {

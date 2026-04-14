@@ -343,6 +343,36 @@ func TestVerifyTransactionRejectsInvalidOutputIndexWithoutPanic(t *testing.T) {
 	}
 }
 
+func TestValidateBlockRejectsDuplicateSpendInsideBlock(t *testing.T) {
+	dataDir := filepath.Join(t.TempDir(), "data")
+	miner := mustNewWallet(t)
+	alice := mustNewWallet(t)
+
+	created, err := CreateBlockchain(dataDir, miner.Address())
+	if err != nil {
+		t.Fatalf("CreateBlockchain() error = %v", err)
+	}
+	t.Cleanup(func() { _ = created.Close() })
+
+	tx1, err := created.SendTransaction(miner, alice.Address(), 20, 0)
+	if err != nil {
+		t.Fatalf("SendTransaction(tx1) error = %v", err)
+	}
+	// Clone tx1 and force a second conflicting spend reference for block-level validation.
+	conflict := tx1.Clone()
+	conflict.Outputs[0].Value = 15
+	conflict.Outputs[1].Value = 35
+	conflict.ID = conflict.Hash()
+	if err := created.SignTransaction(&conflict, miner.PrivateKey); err != nil {
+		t.Fatalf("SignTransaction(conflict) error = %v", err)
+	}
+
+	block := NewBlock([]Transaction{NewCoinbaseTransaction(miner.Address(), "reward"), tx1, conflict}, created.tip, 1)
+	if err := created.ValidateBlock(block); !errors.Is(err, ErrDoubleSpend) {
+		t.Fatalf("ValidateBlock(double spend) error = %v, want ErrDoubleSpend", err)
+	}
+}
+
 func TestMerkleRootRejectsTampering(t *testing.T) {
 	dataDir := filepath.Join(t.TempDir(), "data")
 	miner := mustNewWallet(t)
@@ -368,6 +398,28 @@ func TestMerkleRootRejectsTampering(t *testing.T) {
 	block.Transactions[0].Outputs[0].Value = 999
 	if block.VerifyMerkleRoot() {
 		t.Fatalf("VerifyMerkleRoot(tampered) = true, want false")
+	}
+}
+
+func TestImportInvalidGenesisBlockToEmptyDirFails(t *testing.T) {
+	dataDir := filepath.Join(t.TempDir(), "data")
+	miner := mustNewWallet(t)
+	alice := mustNewWallet(t)
+
+	coinbaseA := NewCoinbaseTransaction(miner.Address(), "reward-a")
+	coinbaseB := NewCoinbaseTransaction(alice.Address(), "reward-b")
+	badGenesis := NewBlock([]Transaction{coinbaseA, coinbaseB}, nil, 0)
+
+	if err := ImportBlockToDir(dataDir, badGenesis); !errors.Is(err, ErrInvalidBlock) {
+		t.Fatalf("ImportBlockToDir(invalid genesis) error = %v, want ErrInvalidBlock", err)
+	}
+
+	height, err := BestHeight(dataDir)
+	if err != nil {
+		t.Fatalf("BestHeight() error = %v", err)
+	}
+	if height != -1 {
+		t.Fatalf("BestHeight() = %d, want -1 for no imported chain", height)
 	}
 }
 

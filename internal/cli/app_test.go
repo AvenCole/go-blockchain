@@ -43,7 +43,7 @@ func TestRunDoctor(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("Run(doctor) exit code = %d, want 0", code)
 	}
-	if !strings.Contains(stdout.String(), "next_step=implement network simulation") {
+	if !strings.Contains(stdout.String(), "next_step=implement gui system") {
 		t.Fatalf("doctor output missing next step: %q", stdout.String())
 	}
 }
@@ -326,5 +326,49 @@ func TestRunUnknownCommand(t *testing.T) {
 	}
 	if !strings.Contains(stderr.String(), "unknown command") {
 		t.Fatalf("stderr missing unknown command error: %q", stderr.String())
+	}
+}
+
+func TestSimDoubleSpendRejectsSecondTransaction(t *testing.T) {
+	cfg := config.Default()
+	cfg.DataDir = filepath.Join(t.TempDir(), "data")
+
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	app := NewApp(cfg, &stdout, &stderr)
+
+	if code := app.Run([]string{"createwallet"}); code != 0 {
+		t.Fatalf("createwallet source exit code = %d, stderr=%q", code, stderr.String())
+	}
+	from := strings.TrimPrefix(strings.TrimSpace(stdout.String()), "created wallet address=")
+	stdout.Reset()
+	stderr.Reset()
+
+	if code := app.Run([]string{"createwallet"}); code != 0 {
+		t.Fatalf("createwallet to1 exit code = %d, stderr=%q", code, stderr.String())
+	}
+	to1 := strings.TrimPrefix(strings.TrimSpace(stdout.String()), "created wallet address=")
+	stdout.Reset()
+	stderr.Reset()
+
+	if code := app.Run([]string{"createwallet"}); code != 0 {
+		t.Fatalf("createwallet to2 exit code = %d, stderr=%q", code, stderr.String())
+	}
+	to2 := strings.TrimPrefix(strings.TrimSpace(stdout.String()), "created wallet address=")
+	stdout.Reset()
+	stderr.Reset()
+
+	if code := app.Run([]string{"createblockchain", from}); code != 0 {
+		t.Fatalf("createblockchain exit code = %d, stderr=%q", code, stderr.String())
+	}
+	stdout.Reset()
+	stderr.Reset()
+
+	if code := app.Run([]string{"simdouble", from, to1, to2, "20"}); code != 0 {
+		t.Fatalf("simdouble exit code = %d, stderr=%q", code, stderr.String())
+	}
+
+	if !strings.Contains(stdout.String(), "rejected=true") {
+		t.Fatalf("simdouble output = %q, want rejected second tx", stdout.String())
 	}
 }
