@@ -1,15 +1,20 @@
 package cli
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io"
+	"os"
+	"os/signal"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 
 	"go-blockchain/internal/blockchain"
 	"go-blockchain/internal/config"
+	"go-blockchain/internal/network"
 	"go-blockchain/internal/wallet"
 )
 
@@ -68,6 +73,8 @@ func (a App) Run(args []string) int {
 		return a.mine(args[1:])
 	case "printmempool":
 		return a.printMempool(args[1:])
+	case "startnode":
+		return a.startNode(args[1:])
 	default:
 		fmt.Fprintf(a.stderr, "unknown command: %s\n\n", args[0])
 		a.printHelp()
@@ -102,6 +109,7 @@ func (a App) printHelp() {
 	fmt.Fprintln(a.stdout, "  createwallet                     Create a new wallet and save it")
 	fmt.Fprintln(a.stdout, "  listaddresses                    List all saved wallet addresses")
 	fmt.Fprintln(a.stdout, "  reindexutxo                      Rebuild the cached UTXO set")
+	fmt.Fprintln(a.stdout, "  startnode <addr> [seed] [miner]  Start one local network node")
 	fmt.Fprintln(a.stdout, "  mine <miner-address>             Mine all pending transactions into a block")
 	fmt.Fprintln(a.stdout, "  printmempool                     List pending transaction IDs")
 }
@@ -474,5 +482,52 @@ func (a App) printMempool(args []string) int {
 	for _, tx := range txs {
 		fmt.Fprintln(a.stdout, tx.IDHex())
 	}
+	return 0
+}
+
+func (a App) startNode(args []string) int {
+	if len(args) < 1 || len(args) > 3 {
+		fmt.Fprintln(a.stderr, "startnode requires: <addr> [seed] [miner-address]")
+		return 1
+	}
+
+	address := args[0]
+	seed := ""
+	miner := ""
+	if len(args) >= 2 {
+		seed = args[1]
+	}
+	if len(args) == 3 {
+		miner = args[2]
+		if !wallet.ValidateAddress(miner) {
+			fmt.Fprintln(a.stderr, "invalid miner address")
+			return 1
+		}
+	}
+
+	node := network.NewNode(address, a.cfg.DataDir, miner)
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
+	if seed != "" {
+		go func() {
+			time.Sleep(200 * time.Millisecond)
+			_ = node.Connect(seed)
+		}()
+	}
+
+	fmt.Fprintf(a.stdout, "starting node at %s\n", address)
+	if seed != "" {
+		fmt.Fprintf(a.stdout, "seed=%s\n", seed)
+	}
+	if miner != "" {
+		fmt.Fprintf(a.stdout, "miner=%s\n", miner)
+	}
+
+	if err := node.Listen(ctx); err != nil {
+		fmt.Fprintf(a.stderr, "start node: %v\n", err)
+		return 1
+	}
+
 	return 0
 }
