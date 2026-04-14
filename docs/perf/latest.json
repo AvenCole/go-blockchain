@@ -1,0 +1,15 @@
+{
+  "generatedAt": "2026-04-14T06:06:10Z",
+  "dataDir": "./data",
+  "height": 1,
+  "addressesTested": 2,
+  "lookupsPerAddress": 10,
+  "totalLookups": 20,
+  "cachedDurationMs": 1.588,
+  "fullScanDurationMs": 1.056,
+  "speedup": 0.6649874055415617,
+  "sampleBalances": {
+    "1F8YSoeJh4ZsFCceZKGBqbhjHRR8xYdvMD": 80,
+    "1NGkqJ2uZftSXf4zqF3Vvw3y4Eq7mkYM3s": 20
+  }
+}
