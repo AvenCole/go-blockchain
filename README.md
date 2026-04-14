@@ -22,6 +22,7 @@
 - Plan 10：交易池与经济模型，已完成
 - Plan 11：网络模拟，已完成
 - Plan 12：安全校验与攻击模拟，已完成
+- Plan 13：GUI 演示层，已完成
 
 ## 仓库结构
 
@@ -58,6 +59,15 @@ go run ./cmd/go-blockchain --help
 go run ./cmd/go-blockchain version
 go run ./cmd/go-blockchain doctor
 ```
+
+GUI 默认使用独立数据目录：
+
+- CLI / 节点：`./data`
+- GUI：`./data/gui-desktop`
+
+如需修改 GUI 数据目录，可设置环境变量：
+
+- `GO_BLOCKCHAIN_GUI_DATA_DIR`
 
 ## 文档怎么读
 
@@ -117,6 +127,10 @@ go run ./cmd/go-blockchain doctor
 
 解释安全校验与攻击模拟如何落地，包括双花检测、非法交易拦截、非法区块拒绝和 CLI 攻击演示入口。
 
+### 15. `docs/plan/plan13.md`
+
+解释 GUI 演示层如何落地，包括 Wails 桌面壳、React 19 + TypeScript + MUI 前端、多页面结构和真实后端绑定。
+
 ## 开发原则
 
 1. 每个阶段先明确边界，再落地实现。
@@ -127,13 +141,13 @@ go run ./cmd/go-blockchain doctor
 
 ## 下一步
 
-当前将进入 Plan 13：GUI 演示层。
+当前将进入 Plan 14：性能实验与优化。
 
 这个阶段会开始建立：
 
-1. Dashboard
-2. 钱包页面
-3. 区块浏览
-4. 图形化链展示
+1. 全链扫描与 UTXO 缓存性能对比
+2. 数据展示与实验记录
+3. 热点路径优化
+4. 为最终实验报告提供数据支撑
 
 后续实现时会继续同步补充代码和文档。
