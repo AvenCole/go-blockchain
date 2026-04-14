@@ -52,7 +52,7 @@ func TestRunDoctor(t *testing.T) {
 		t.Fatalf("Run(doctor) exit code = %d, want 0", code)
 	}
 
-	if !strings.Contains(stdout.String(), "next_step=implement proof of work") {
+	if !strings.Contains(stdout.String(), "next_step=implement mempool and economic model") {
 		t.Fatalf("doctor output missing next step: %q", stdout.String())
 	}
 }
@@ -154,6 +154,9 @@ func TestCreateBlockchainAddBlockAndPrintChain(t *testing.T) {
 	}
 	if !strings.Contains(output, "MerkleRoot: ") {
 		t.Fatalf("printchain output missing MerkleRoot: %q", output)
+	}
+	if !strings.Contains(output, "Difficulty: ") || !strings.Contains(output, "Nonce: ") || !strings.Contains(output, "PoWValid: true") {
+		t.Fatalf("printchain output missing PoW fields: %q", output)
 	}
 	if !strings.Contains(output, "Output: to="+address+" value=50") {
 		t.Fatalf("printchain output missing debug coinbase output: %q", output)

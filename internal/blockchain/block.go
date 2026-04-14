@@ -16,6 +16,8 @@ type Block struct {
 	MerkleRoot    []byte
 	PrevBlockHash []byte
 	Hash          []byte
+	Nonce         int
+	Difficulty    int
 	Height        int
 }
 
@@ -25,10 +27,14 @@ func NewBlock(transactions []Transaction, prevBlockHash []byte, height int) *Blo
 		Timestamp:     time.Now().Unix(),
 		Transactions:  cloneTransactions(transactions),
 		PrevBlockHash: append([]byte(nil), prevBlockHash...),
+		Difficulty:    defaultDifficulty,
 		Height:        height,
 	}
 	block.MerkleRoot = block.CalculateMerkleRoot()
-	block.Hash = block.CalculateHash()
+	proof := NewProofOfWork(block)
+	nonce, hash := proof.Run()
+	block.Nonce = nonce
+	block.Hash = hash
 
 	return block
 }
@@ -40,12 +46,19 @@ func NewGenesisBlock(coinbase Transaction) *Block {
 
 // CalculateHash derives the block hash from the current header fields.
 func (b Block) CalculateHash() []byte {
+	return b.CalculateHashWithNonce(b.Nonce)
+}
+
+// CalculateHashWithNonce derives the block hash from the current header fields and one nonce.
+func (b Block) CalculateHashWithNonce(nonce int) []byte {
 	headers := bytes.Join(
 		[][]byte{
 			[]byte(strconv.FormatInt(b.Timestamp, 10)),
 			b.MerkleRoot,
 			b.PrevBlockHash,
 			[]byte(strconv.Itoa(b.Height)),
+			[]byte(strconv.Itoa(b.Difficulty)),
+			[]byte(strconv.Itoa(nonce)),
 		},
 		[]byte{},
 	)
@@ -110,6 +123,12 @@ func (b Block) CalculateMerkleRoot() []byte {
 // VerifyMerkleRoot recomputes the Merkle root to validate transaction integrity.
 func (b Block) VerifyMerkleRoot() bool {
 	return bytes.Equal(b.MerkleRoot, b.CalculateMerkleRoot())
+}
+
+// VerifyProofOfWork validates that the stored hash/nonce satisfy the current difficulty.
+func (b Block) VerifyProofOfWork() bool {
+	proof := NewProofOfWork(&b)
+	return proof.Validate()
 }
 
 func cloneTransactions(transactions []Transaction) []Transaction {
