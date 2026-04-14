@@ -37,11 +37,7 @@ func New() (*Wallet, error) {
 
 // Address returns the wallet address encoded in Base58.
 func (w Wallet) Address() string {
-	pubKeyHash := HashPublicKey(w.PublicKey)
-	versionedPayload := append([]byte{version}, pubKeyHash...)
-	fullPayload := append(versionedPayload, checksum(versionedPayload)...)
-
-	return Base58Encode(fullPayload)
+	return AddressFromPubKey(w.PublicKey)
 }
 
 // HashPublicKey derives a shortened public key hash for address generation.
@@ -51,22 +47,23 @@ func HashPublicKey(publicKey []byte) []byte {
 	return append([]byte(nil), trimmed...)
 }
 
+// AddressFromPubKey derives an address directly from one public key.
+func AddressFromPubKey(publicKey []byte) string {
+	return AddressFromPubKeyHash(HashPublicKey(publicKey))
+}
+
+// AddressFromPubKeyHash derives an address from one public key hash.
+func AddressFromPubKeyHash(pubKeyHash []byte) string {
+	versionedPayload := append([]byte{version}, pubKeyHash...)
+	fullPayload := append(versionedPayload, checksum(versionedPayload)...)
+
+	return Base58Encode(fullPayload)
+}
+
 // ValidateAddress checks the address version and checksum.
 func ValidateAddress(address string) bool {
-	decoded := Base58Decode(address)
-	if len(decoded) < 1+checksumLength {
-		return false
-	}
-
-	payload := decoded[:len(decoded)-checksumLength]
-	actualChecksum := decoded[len(decoded)-checksumLength:]
-	expectedChecksum := checksum(payload)
-
-	if payload[0] != version {
-		return false
-	}
-
-	return bytes.Equal(actualChecksum, expectedChecksum)
+	_, err := PublicKeyHashFromAddress(address)
+	return err == nil
 }
 
 // PrivateKeyBytes exposes the scalar for persistence.
@@ -98,6 +95,27 @@ func FromRecord(dBytes, xBytes, yBytes []byte) (*Wallet, error) {
 		PrivateKey: privateKey,
 		PublicKey:  publicKey,
 	}, nil
+}
+
+// PublicKeyHashFromAddress extracts the public key hash carried by one address.
+func PublicKeyHashFromAddress(address string) ([]byte, error) {
+	decoded := Base58Decode(address)
+	if len(decoded) < 1+checksumLength {
+		return nil, fmt.Errorf("address payload too short")
+	}
+
+	payload := decoded[:len(decoded)-checksumLength]
+	actualChecksum := decoded[len(decoded)-checksumLength:]
+	expectedChecksum := checksum(payload)
+
+	if payload[0] != version {
+		return nil, fmt.Errorf("unsupported address version")
+	}
+	if !bytes.Equal(actualChecksum, expectedChecksum) {
+		return nil, fmt.Errorf("invalid address checksum")
+	}
+
+	return append([]byte(nil), payload[1:]...), nil
 }
 
 func checksum(payload []byte) []byte {

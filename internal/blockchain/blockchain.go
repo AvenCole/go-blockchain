@@ -1,12 +1,16 @@
 package blockchain
 
 import (
+	"bytes"
+	"crypto/ecdsa"
 	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 
 	"github.com/cockroachdb/pebble"
+
+	"go-blockchain/internal/wallet"
 )
 
 var (
@@ -16,6 +20,10 @@ var (
 	ErrBlockchainNotInitialized = errors.New("blockchain not initialized")
 	// ErrInsufficientFunds reports that the sender cannot cover the requested amount.
 	ErrInsufficientFunds = errors.New("insufficient funds")
+	// ErrTransactionNotFound reports that one referenced transaction cannot be found.
+	ErrTransactionNotFound = errors.New("transaction not found")
+	// ErrInvalidTransaction reports that signature verification failed.
+	ErrInvalidTransaction = errors.New("invalid transaction")
 )
 
 var lastHashKey = []byte("lh")
@@ -121,6 +129,12 @@ func OpenBlockchain(dataDir string) (*Blockchain, error) {
 
 // AddBlock appends a new block to the tip of the chain.
 func (bc *Blockchain) AddBlock(transactions []Transaction) (*Block, error) {
+	for _, tx := range transactions {
+		if !bc.VerifyTransaction(tx) {
+			return nil, ErrInvalidTransaction
+		}
+	}
+
 	lastBlock, err := bc.CurrentBlock()
 	if err != nil {
 		return nil, err
@@ -150,14 +164,9 @@ func (bc *Blockchain) AddBlock(transactions []Transaction) (*Block, error) {
 	return newBlock, nil
 }
 
-// SendTransaction creates a UTXO-style unsigned transaction and stores it in a new block.
-func (bc *Blockchain) SendTransaction(from, to string, amount int) (*Block, Transaction, error) {
-	accumulated, spendable, err := bc.FindSpendableOutputs(from, amount)
-	if err != nil {
-		return nil, Transaction{}, err
-	}
-
-	tx, err := NewUTXOTransaction(from, to, amount, spendable, accumulated)
+// SendTransaction creates a signed UTXO-style transaction and stores it in a new block.
+func (bc *Blockchain) SendTransaction(fromWallet *wallet.Wallet, to string, amount int) (*Block, Transaction, error) {
+	tx, err := NewUTXOTransaction(fromWallet, to, amount, bc)
 	if err != nil {
 		return nil, Transaction{}, err
 	}
@@ -208,9 +217,64 @@ func (bc *Blockchain) Blocks() ([]*Block, error) {
 	return blocks, nil
 }
 
+// FindTransaction returns one transaction by its ID.
+func (bc *Blockchain) FindTransaction(id []byte) (Transaction, error) {
+	blocks, err := bc.Blocks()
+	if err != nil {
+		return Transaction{}, err
+	}
+
+	for _, block := range blocks {
+		for _, tx := range block.Transactions {
+			if bytes.Equal(tx.ID, id) {
+				return tx.Clone(), nil
+			}
+		}
+	}
+
+	return Transaction{}, ErrTransactionNotFound
+}
+
+// SignTransaction signs one transaction against the referenced previous outputs.
+func (bc *Blockchain) SignTransaction(tx *Transaction, privKey ecdsa.PrivateKey) error {
+	prevTXs := make(map[string]Transaction)
+	for _, input := range tx.Inputs {
+		prevTx, err := bc.FindTransaction(input.TxID)
+		if err != nil {
+			return err
+		}
+		prevTXs[input.TxIDHex()] = prevTx
+	}
+
+	return tx.Sign(privKey, prevTXs)
+}
+
+// VerifyTransaction checks one transaction signature set.
+func (bc *Blockchain) VerifyTransaction(tx Transaction) bool {
+	if tx.IsCoinbase() {
+		return true
+	}
+
+	prevTXs := make(map[string]Transaction)
+	for _, input := range tx.Inputs {
+		prevTx, err := bc.FindTransaction(input.TxID)
+		if err != nil {
+			return false
+		}
+		prevTXs[input.TxIDHex()] = prevTx
+	}
+
+	return tx.Verify(prevTXs)
+}
+
 // BalanceOf computes the balance by summing unspent outputs.
 func (bc *Blockchain) BalanceOf(address string) (int, error) {
-	utxos, err := bc.FindUTXO(address)
+	pubKeyHash, err := wallet.PublicKeyHashFromAddress(address)
+	if err != nil {
+		return 0, err
+	}
+
+	utxos, err := bc.FindUTXO(pubKeyHash)
 	if err != nil {
 		return 0, err
 	}
@@ -224,7 +288,7 @@ func (bc *Blockchain) BalanceOf(address string) (int, error) {
 }
 
 // FindSpendableOutputs returns spendable outputs for one address.
-func (bc *Blockchain) FindSpendableOutputs(address string, amount int) (int, map[string][]int, error) {
+func (bc *Blockchain) FindSpendableOutputs(pubKeyHash []byte, amount int) (int, map[string][]int, error) {
 	blocks, err := bc.Blocks()
 	if err != nil {
 		return 0, nil, err
@@ -242,7 +306,7 @@ func (bc *Blockchain) FindSpendableOutputs(address string, amount int) (int, map
 				if spentTXOs[txID] != nil && spentTXOs[txID][outIdx] {
 					continue
 				}
-				if !output.IsLockedWith(address) {
+				if !output.IsLockedWith(pubKeyHash) {
 					continue
 				}
 
@@ -258,7 +322,7 @@ func (bc *Blockchain) FindSpendableOutputs(address string, amount int) (int, map
 			}
 
 			for _, input := range tx.Inputs {
-				if !input.UsesKey(address) {
+				if !input.UsesKey(pubKeyHash) {
 					continue
 				}
 
@@ -275,7 +339,7 @@ func (bc *Blockchain) FindSpendableOutputs(address string, amount int) (int, map
 }
 
 // FindUTXO returns all currently unspent outputs for one address.
-func (bc *Blockchain) FindUTXO(address string) ([]TXOutput, error) {
+func (bc *Blockchain) FindUTXO(pubKeyHash []byte) ([]TXOutput, error) {
 	blocks, err := bc.Blocks()
 	if err != nil {
 		return nil, err
@@ -292,7 +356,7 @@ func (bc *Blockchain) FindUTXO(address string) ([]TXOutput, error) {
 				if spentTXOs[txID] != nil && spentTXOs[txID][outIdx] {
 					continue
 				}
-				if output.IsLockedWith(address) {
+				if output.IsLockedWith(pubKeyHash) {
 					utxos = append(utxos, output)
 				}
 			}
@@ -302,7 +366,7 @@ func (bc *Blockchain) FindUTXO(address string) ([]TXOutput, error) {
 			}
 
 			for _, input := range tx.Inputs {
-				if !input.UsesKey(address) {
+				if !input.UsesKey(pubKeyHash) {
 					continue
 				}
 

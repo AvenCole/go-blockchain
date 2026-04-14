@@ -91,7 +91,7 @@ func (a App) printHelp() {
 	fmt.Fprintln(a.stdout, "  createblockchain [genesis-address]  Create a new blockchain")
 	fmt.Fprintln(a.stdout, "  addblock <label>                    Append a debug coinbase-style block")
 	fmt.Fprintln(a.stdout, "  printchain                       Print the blockchain from tip to genesis")
-	fmt.Fprintln(a.stdout, "  send <from> <to> <amount>           Add an unsigned UTXO-style transaction block")
+	fmt.Fprintln(a.stdout, "  send <from> <to> <amount>           Add a signed UTXO-style transaction block")
 	fmt.Fprintln(a.stdout, "  getbalance <address>                Show the current UTXO balance for one address")
 	fmt.Fprintln(a.stdout, "  createwallet                     Create a new wallet and save it")
 	fmt.Fprintln(a.stdout, "  listaddresses                    List all saved wallet addresses")
@@ -121,13 +121,17 @@ func (a App) printDoctor() {
 	fmt.Fprintf(a.stdout, "log_level=%s\n", a.cfg.LogLevel)
 	fmt.Fprintf(a.stdout, "network_mode=%s\n", a.cfg.NetworkMode)
 	fmt.Fprintf(a.stdout, "chain_status=%s\n", chainStatus)
-	fmt.Fprintln(a.stdout, "next_step=implement transaction signatures")
+	fmt.Fprintln(a.stdout, "next_step=implement UTXO cache")
 }
 
 func (a App) createBlockchain(args []string) int {
 	genesisAddress := "miner"
 	if len(args) > 0 {
 		genesisAddress = strings.Join(args, " ")
+	}
+	if !wallet.ValidateAddress(genesisAddress) {
+		fmt.Fprintln(a.stderr, "invalid genesis address")
+		return 1
 	}
 
 	chain, err := blockchain.CreateBlockchain(a.cfg.DataDir, genesisAddress)
@@ -164,7 +168,18 @@ func (a App) addBlock(args []string) int {
 	}
 	defer chain.Close()
 
-	noteTx := blockchain.NewCoinbaseTransaction("system", strings.Join(args, " "))
+	wallets, err := wallet.NewWallets(a.cfg.DataDir)
+	if err != nil {
+		fmt.Fprintf(a.stderr, "load wallets: %v\n", err)
+		return 1
+	}
+	addresses := wallets.Addresses()
+	if len(addresses) == 0 {
+		fmt.Fprintln(a.stderr, "addblock requires at least one wallet address; run createwallet first")
+		return 1
+	}
+
+	noteTx := blockchain.NewCoinbaseTransaction(addresses[0], strings.Join(args, " "))
 	block, err := chain.AddBlock([]blockchain.Transaction{noteTx})
 	if err != nil {
 		fmt.Fprintf(a.stderr, "add block: %v\n", err)
@@ -208,10 +223,11 @@ func (a App) printChain(args []string) int {
 		for _, tx := range block.Transactions {
 			fmt.Fprintf(a.stdout, "  TxID: %s\n", tx.IDHex())
 			for _, input := range tx.Inputs {
-				fmt.Fprintf(a.stdout, "    Input: txid=%s out=%d from=%s\n", input.TxIDHex(), input.Out, input.From)
+				source := input.FromDisplay()
+				fmt.Fprintf(a.stdout, "    Input: txid=%s out=%d source=%s\n", input.TxIDHex(), input.Out, source)
 			}
 			for _, output := range tx.Outputs {
-				fmt.Fprintf(a.stdout, "    Output: to=%s value=%d\n", output.To, output.Value)
+				fmt.Fprintf(a.stdout, "    Output: to=%s value=%d\n", output.Address(), output.Value)
 			}
 		}
 		fmt.Fprintln(a.stdout)
@@ -223,6 +239,10 @@ func (a App) printChain(args []string) int {
 func (a App) send(args []string) int {
 	if len(args) != 3 {
 		fmt.Fprintln(a.stderr, "send requires: <from> <to> <amount>")
+		return 1
+	}
+	if !wallet.ValidateAddress(args[0]) || !wallet.ValidateAddress(args[1]) {
+		fmt.Fprintln(a.stderr, "send requires valid from/to wallet addresses")
 		return 1
 	}
 
@@ -244,7 +264,19 @@ func (a App) send(args []string) int {
 	}
 	defer chain.Close()
 
-	block, tx, err := chain.SendTransaction(args[0], args[1], amount)
+	wallets, err := wallet.NewWallets(a.cfg.DataDir)
+	if err != nil {
+		fmt.Fprintf(a.stderr, "load wallets: %v\n", err)
+		return 1
+	}
+
+	fromWallet, ok := wallets.GetWallet(args[0])
+	if !ok {
+		fmt.Fprintln(a.stderr, "sender wallet not found")
+		return 1
+	}
+
+	block, tx, err := chain.SendTransaction(fromWallet, args[1], amount)
 	if err != nil {
 		fmt.Fprintf(a.stderr, "send transaction: %v\n", err)
 		return 1
