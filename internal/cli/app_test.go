@@ -108,8 +108,36 @@ func TestCreateBlockchainAddBlockAndPrintChain(t *testing.T) {
 	if !strings.Contains(output, "Difficulty: ") || !strings.Contains(output, "Nonce: ") || !strings.Contains(output, "PoWValid: true") {
 		t.Fatalf("printchain output missing PoW fields: %q", output)
 	}
+	if !strings.Contains(output, "ScriptPubKey: OP_DUP OP_HASH160") {
+		t.Fatalf("printchain output missing ScriptPubKey: %q", output)
+	}
 	if !strings.Contains(output, "Output: to="+address+" value=50") {
 		t.Fatalf("printchain output missing coinbase output: %q", output)
+	}
+}
+
+func TestRunShowScript(t *testing.T) {
+	cfg := config.Default()
+	cfg.DataDir = filepath.Join(t.TempDir(), "data")
+
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	app := NewApp(cfg, &stdout, &stderr)
+
+	if code := app.Run([]string{"createwallet"}); code != 0 {
+		t.Fatalf("createwallet exit code = %d, stderr=%q", code, stderr.String())
+	}
+	address := strings.TrimPrefix(strings.TrimSpace(stdout.String()), "created wallet address=")
+	stdout.Reset()
+	stderr.Reset()
+
+	if code := app.Run([]string{"showscript", address}); code != 0 {
+		t.Fatalf("showscript exit code = %d, stderr=%q", code, stderr.String())
+	}
+
+	output := stdout.String()
+	if !strings.Contains(output, "scriptPubKey=OP_DUP OP_HASH160") {
+		t.Fatalf("showscript output = %q, want P2PKH script", output)
 	}
 }
 

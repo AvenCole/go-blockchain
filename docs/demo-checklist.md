@@ -20,6 +20,7 @@
 - [ ] `createwallet`
 - [ ] `listaddresses`
 - [ ] `createblockchain`
+- [ ] `showscript`
 - [ ] `send`
 - [ ] `printmempool`
 - [ ] `mine`
@@ -58,6 +59,7 @@
 - [ ] `docs/report.md`
 - [ ] `docs/defense-script.md`
 - [ ] `docs/plan/` 文档完整
+- [ ] Script VM 演示说辞已准备好
 
 ## 八、最后确认
 

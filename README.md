@@ -24,6 +24,8 @@
 - Plan 12：安全校验与攻击模拟，已完成
 - Plan 13：GUI 演示层，已完成
 - Plan 14：性能实验与优化，已完成
+- Plan 15：实验报告与答辩材料整理，已完成
+- Plan 16：Script / OP 虚拟机，已完成
 
 ## 仓库结构
 
@@ -46,19 +48,28 @@ tests/                  后续集成测试与验收脚本目录
 
 ## 当前可运行能力
 
-当前仓库已完成初始化阶段的最小 CLI 骨架，支持：
+当前仓库当前已支持的核心 CLI 能力包括：
 
-- `--help`
-- `version`
-- `about`
-- `doctor`
+- `createwallet`
+- `listaddresses`
+- `createblockchain`
+- `send`
+- `printmempool`
+- `mine`
+- `getbalance`
+- `printchain`
+- `showscript`
+- `simdouble`
+- `runperf`
+- `startnode`
 
 示例：
 
 ```bash
-go run ./cmd/go-blockchain --help
-go run ./cmd/go-blockchain version
-go run ./cmd/go-blockchain doctor
+go run ./cmd/go-blockchain createwallet
+go run ./cmd/go-blockchain showscript <address>
+go run ./cmd/go-blockchain createblockchain <miner-address>
+go run ./cmd/go-blockchain printchain
 ```
 
 GUI 默认使用独立数据目录：
@@ -140,6 +151,14 @@ GUI 默认使用独立数据目录：
 
 保存性能实验输出文件，便于答辩和实验报告直接引用。
 
+### 18. `docs/plan/plan15.md`
+
+解释实验报告、架构说明、答辩脚本和检查清单为什么要单独整理成正式交付物。
+
+### 19. `docs/plan/plan16.md`
+
+解释 Script / OP 虚拟机如何落地，包括最小 P2PKH 指令集、脚本执行流程、兼容旧交易的原因和 CLI 演示方式。
+
 ## 开发原则
 
 1. 每个阶段先明确边界，再落地实现。
@@ -150,13 +169,18 @@ GUI 默认使用独立数据目录：
 
 ## 下一步
 
-当前将进入 Plan 15：实验报告与答辩材料整理。
+当前已完成到 Plan 16：Script / OP 虚拟机。
 
-这个阶段会开始建立：
+当前新增的关键能力包括：
 
-1. 架构说明整理
-2. 实验结果汇总
-3. 演示脚本整理
-4. 最终答辩材料收尾
+1. `scriptSig` / `scriptPubKey`
+2. 最小 P2PKH Script VM
+3. `showscript` CLI 演示入口
+4. 新交易走脚本执行验证，同时兼容旧交易
 
-后续实现时会继续同步补充代码和文档。
+后续如果继续扩展，优先方向会是：
+
+1. 更完整的分叉与最长链处理
+2. 更复杂的脚本类型
+3. GUI 中的脚本可视化展示
+4. 更强的网络状态与运维面板

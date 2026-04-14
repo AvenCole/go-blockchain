@@ -71,6 +71,8 @@ func (a App) Run(args []string) int {
 		return a.listAddresses(args[1:])
 	case "reindexutxo":
 		return a.reindexUTXO(args[1:])
+	case "showscript":
+		return a.showScript(args[1:])
 	case "mine":
 		return a.mine(args[1:])
 	case "printmempool":
@@ -115,6 +117,7 @@ func (a App) printHelp() {
 	fmt.Fprintln(a.stdout, "  createwallet                     Create a new wallet and save it")
 	fmt.Fprintln(a.stdout, "  listaddresses                    List all saved wallet addresses")
 	fmt.Fprintln(a.stdout, "  reindexutxo                      Rebuild the cached UTXO set")
+	fmt.Fprintln(a.stdout, "  showscript <address>             Show the standard P2PKH locking script for one address")
 	fmt.Fprintln(a.stdout, "  startnode <addr> [seed] [miner]  Start one local network node")
 	fmt.Fprintln(a.stdout, "  mine <miner-address>             Mine all pending transactions into a block")
 	fmt.Fprintln(a.stdout, "  printmempool                     List pending transaction IDs")
@@ -254,9 +257,11 @@ func (a App) printChain(args []string) int {
 			for _, input := range tx.Inputs {
 				source := input.FromDisplay()
 				fmt.Fprintf(a.stdout, "    Input: txid=%s out=%d source=%s\n", input.TxIDHex(), input.Out, source)
+				fmt.Fprintf(a.stdout, "      ScriptSig: %s\n", input.EffectiveScriptSig().String())
 			}
 			for _, output := range tx.Outputs {
 				fmt.Fprintf(a.stdout, "    Output: to=%s value=%d\n", output.Address(), output.Value)
+				fmt.Fprintf(a.stdout, "      ScriptPubKey: %s\n", output.EffectiveScriptPubKey().String())
 			}
 		}
 		fmt.Fprintln(a.stdout)
@@ -427,6 +432,25 @@ func (a App) reindexUTXO(args []string) int {
 	}
 
 	fmt.Fprintln(a.stdout, "utxo set reindexed")
+	return 0
+}
+
+func (a App) showScript(args []string) int {
+	if len(args) != 1 {
+		fmt.Fprintln(a.stderr, "showscript requires: <address>")
+		return 1
+	}
+
+	pubKeyHash, err := wallet.PublicKeyHashFromAddress(args[0])
+	if err != nil {
+		fmt.Fprintf(a.stderr, "decode address: %v\n", err)
+		return 1
+	}
+
+	script := blockchain.NewP2PKHLockingScript(pubKeyHash)
+	fmt.Fprintf(a.stdout, "address=%s\n", args[0])
+	fmt.Fprintf(a.stdout, "pubKeyHash=%x\n", pubKeyHash)
+	fmt.Fprintf(a.stdout, "scriptPubKey=%s\n", script.String())
 	return 0
 }
 

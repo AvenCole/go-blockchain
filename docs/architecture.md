@@ -47,11 +47,12 @@ go-blockchain
 1. `Block`
 2. `Blockchain`
 3. `Transaction`
-4. `UTXO` 查找与缓存
-5. `MerkleTree`
-6. `ProofOfWork`
-7. `Mempool`
-8. 区块与交易验证
+4. `Script / OP` 虚拟机
+5. `UTXO` 查找与缓存
+6. `MerkleTree`
+7. `ProofOfWork`
+8. `Mempool`
+9. 区块与交易验证
 
 ### 4.1 Block
 
@@ -75,6 +76,8 @@ go-blockchain
 3. 公钥证明
 4. 手续费支持
 5. coinbase 奖励交易
+6. `scriptSig` / `scriptPubKey`
+7. 最小 P2PKH Script VM
 
 ### 4.3 UTXO Cache
 
@@ -149,10 +152,11 @@ GUI 使用：
 系统当前已经具备的安全边界包括：
 
 1. 交易签名验证
-2. 非法输出引用拒绝
-3. 双花拒绝
-4. 非法区块导入拒绝
-5. 网络侧 fail-closed 导入策略
+2. 脚本执行验证
+3. 非法输出引用拒绝
+4. 双花拒绝
+5. 非法区块导入拒绝
+6. 网络侧 fail-closed 导入策略
 
 ## 9. 性能实验
 
@@ -177,19 +181,20 @@ GUI 使用：
 3. 钱包
 4. UTXO
 5. 签名
-6. Merkle
-7. PoW
-8. Mempool
-9. 网络模拟
-10. GUI
-11. 性能实验
+6. Script VM
+7. Merkle
+8. PoW
+9. Mempool
+10. 网络模拟
+11. GUI
+12. 性能实验
 
 ## 11. 后续可扩展方向
 
 如果继续扩展，最合适的方向包括：
 
-1. Script / OP 虚拟机
-2. 更完整的分叉/最长链处理
+1. 更完整的分叉/最长链处理
+2. 更复杂的脚本类型
 3. 更复杂的网络协议
-4. GUI 图形化链结构展示
+4. GUI 图形化链结构与脚本展示
 5. 更完整的性能实验

@@ -73,6 +73,12 @@ func TestCreateBlockchainAndIterate(t *testing.T) {
 	if len(minedTx.Inputs[0].Signature) == 0 {
 		t.Fatalf("tx signature missing")
 	}
+	if minedTx.Inputs[0].EffectiveScriptSig().IsEmpty() {
+		t.Fatalf("tx scriptSig missing")
+	}
+	if minedTx.Outputs[0].EffectiveScriptPubKey().IsEmpty() {
+		t.Fatalf("tx scriptPubKey missing")
+	}
 }
 
 func TestOpenBlockchain(t *testing.T) {

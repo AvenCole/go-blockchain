@@ -14,7 +14,7 @@
 
 可以这样开场：
 
-“本项目是一个基于 Go 的区块链模拟仿真系统，采用分阶段实现方式，已经完成从区块、交易、钱包、UTXO、签名、Merkle、PoW、Mempool、网络模拟，到 GUI 和性能实验的完整链路。” 
+“本项目是一个基于 Go 的区块链模拟仿真系统，采用分阶段实现方式，已经完成从区块、交易、钱包、UTXO、签名、Script / OP 虚拟机、Merkle、PoW、Mempool、网络模拟，到 GUI 和性能实验的完整链路。” 
 
 ## 三、建议演示顺序
 
@@ -49,6 +49,20 @@ go run ./cmd/go-blockchain printchain
 2. 区块头已经包含 MerkleRoot、Difficulty、Nonce
 3. PoW 校验已经成立
 
+### 2.5 脚本系统展示
+
+命令：
+
+```bash
+go run ./cmd/go-blockchain showscript <miner-address>
+```
+
+讲解重点：
+
+1. 地址可以映射成标准 P2PKH 锁定脚本
+2. 当前系统已经支持 `OP_DUP`、`OP_HASH160`、`OP_EQUALVERIFY`、`OP_CHECKSIG`
+3. 交易验证已经升级为脚本执行，而不只是代码里直接写死的签名判断
+
 ### 3. 发送交易 + Mempool + 挖矿
 
 命令：
@@ -69,6 +83,7 @@ go run ./cmd/go-blockchain printchain
 3. coinbase 奖励和手续费都进入矿工收益
 4. 输入输出是 UTXO 风格
 5. 交易有签名校验
+6. `printchain` 中可以直接看到 `scriptSig` 和 `scriptPubKey`
 
 ### 4. 双花攻击模拟
 
@@ -147,7 +162,7 @@ go run ./cmd/go-blockchain runperf 20
 建议回答：
 
 1. 当前已经覆盖区块链主链路的大部分核心机制
-2. 但还没有实现完整 Script / OP 虚拟机
+2. 当前已经实现教学型最小 Script VM，但还不是完整 Bitcoin Script 全指令集
 3. 网络层也还是教学型本地模拟，不是完整比特币 P2P 协议
 
 ### Q2：为什么要分这么多阶段做？
@@ -164,13 +179,14 @@ go run ./cmd/go-blockchain runperf 20
 建议回答：
 
 1. UTXO + 签名交易链路
-2. Merkle + PoW 区块头
-3. Mempool + 手续费 + coinbase 奖励
-4. 网络模拟
-5. GUI 和性能实验
+2. Script VM 驱动的交易验证
+3. Merkle + PoW 区块头
+4. Mempool + 手续费 + coinbase 奖励
+5. 网络模拟
+6. GUI 和性能实验
 
 ## 五、答辩结束总结
 
 最后可以这样收尾：
 
-“这个系统已经完成了一个教学型区块链模拟系统从底层数据结构、交易安全、共识机制，到网络模拟、GUI 展示和性能实验的完整闭环。后续如果继续扩展，最优先的方向是 Script 虚拟机、更完整的分叉处理和更强的网络协议模拟。” 
+“这个系统已经完成了一个教学型区块链模拟系统从底层数据结构、交易安全、脚本验证、共识机制，到网络模拟、GUI 展示和性能实验的完整闭环。后续如果继续扩展，最优先的方向是更完整的脚本类型、更完整的分叉处理和更强的网络协议模拟。” 

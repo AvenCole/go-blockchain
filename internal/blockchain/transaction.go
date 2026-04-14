@@ -9,7 +9,6 @@ import (
 	"encoding/gob"
 	"encoding/hex"
 	"fmt"
-	"math/big"
 	"sort"
 	"strconv"
 
@@ -18,9 +17,11 @@ import (
 
 const coinbaseInputSource = "COINBASE"
 const subsidy = 50
+const txVersionScriptVM = 2
 
 // Transaction is the signed UTXO-style transaction model used in Plan 6.
 type Transaction struct {
+	Version int
 	ID      []byte
 	Inputs  []TXInput
 	Outputs []TXOutput
@@ -32,12 +33,14 @@ type TXInput struct {
 	Out       int
 	Signature []byte
 	PubKey    []byte
+	ScriptSig Script
 }
 
 // TXOutput locks one value to the recipient public key hash.
 type TXOutput struct {
-	Value      int
-	PubKeyHash []byte
+	Value        int
+	PubKeyHash   []byte
+	ScriptPubKey Script
 }
 
 // CachedUTXO keeps the original transaction output index alongside one output.
@@ -63,12 +66,14 @@ func NewCoinbaseTransactionWithReward(to, data string, reward int) Transaction {
 	}
 
 	tx := Transaction{
+		Version: txVersionScriptVM,
 		Inputs: []TXInput{
 			{
 				TxID:      nil,
 				Out:       -1,
 				Signature: nil,
 				PubKey:    []byte(data),
+				ScriptSig: NewCoinbaseScript(data),
 			},
 		},
 		Outputs: []TXOutput{output},
@@ -79,6 +84,10 @@ func NewCoinbaseTransactionWithReward(to, data string, reward int) Transaction {
 
 // NewUTXOTransaction creates a signed UTXO transaction from spendable outputs.
 func NewUTXOTransaction(fromWallet *wallet.Wallet, to string, amount int, fee int, bc *Blockchain) (Transaction, error) {
+	return buildUTXOTransaction(fromWallet, to, amount, fee, bc, txVersionScriptVM)
+}
+
+func buildUTXOTransaction(fromWallet *wallet.Wallet, to string, amount int, fee int, bc *Blockchain, version int) (Transaction, error) {
 	if fromWallet == nil {
 		return Transaction{}, fmt.Errorf("from wallet must not be nil")
 	}
@@ -143,6 +152,7 @@ func NewUTXOTransaction(fromWallet *wallet.Wallet, to string, amount int, fee in
 	}
 
 	tx := Transaction{
+		Version: version,
 		Inputs:  inputs,
 		Outputs: outputs,
 	}
@@ -163,8 +173,9 @@ func NewTXOutput(value int, address string) (TXOutput, error) {
 	}
 
 	return TXOutput{
-		Value:      value,
-		PubKeyHash: pubKeyHash,
+		Value:        value,
+		PubKeyHash:   pubKeyHash,
+		ScriptPubKey: NewP2PKHLockingScript(pubKeyHash),
 	}, nil
 }
 
@@ -219,20 +230,27 @@ func (tx *Transaction) Sign(privKey ecdsa.PrivateKey, prevTXs map[string]Transac
 		}
 	}
 
-	txCopy := tx.TrimmedCopy()
-	for inID, input := range txCopy.Inputs {
-		prevTx := prevTXs[input.TxIDHex()]
-		txCopy.Inputs[inID].PubKey = append([]byte(nil), prevTx.Outputs[input.Out].PubKeyHash...)
-		txCopy.ID = txCopy.Hash()
-		txCopy.Inputs[inID].PubKey = nil
+	for inID := range tx.Inputs {
+		digest := tx.signatureHash(inID, prevTXs)
+		if len(digest) == 0 {
+			return fmt.Errorf("sign input %d: empty digest", inID)
+		}
 
-		r, s, err := ecdsa.Sign(rand.Reader, &privKey, txCopy.ID)
+		r, s, err := ecdsa.Sign(rand.Reader, &privKey, digest)
 		if err != nil {
 			return fmt.Errorf("sign input %d: %w", inID, err)
 		}
 
 		signature := append(r.Bytes(), s.Bytes()...)
 		tx.Inputs[inID].Signature = signature
+		if tx.UsesScriptVM() {
+			pubKey := append([]byte(nil), tx.Inputs[inID].PubKey...)
+			if len(pubKey) == 0 {
+				pubKey = serializePublicKey(&privKey.PublicKey)
+				tx.Inputs[inID].PubKey = append([]byte(nil), pubKey...)
+			}
+			tx.Inputs[inID].ScriptSig = NewP2PKHUnlockingScript(signature, pubKey)
+		}
 	}
 
 	return nil
@@ -254,39 +272,8 @@ func (tx Transaction) Verify(prevTXs map[string]Transaction) bool {
 		}
 	}
 
-	txCopy := tx.TrimmedCopy()
-	curve := elliptic.P256()
-
 	for inID, input := range tx.Inputs {
-		prevTx := prevTXs[input.TxIDHex()]
-		txCopy.Inputs[inID].PubKey = append([]byte(nil), prevTx.Outputs[input.Out].PubKeyHash...)
-		txCopy.ID = txCopy.Hash()
-		txCopy.Inputs[inID].PubKey = nil
-
-		x, y := elliptic.Unmarshal(curve, input.PubKey)
-		if x == nil || y == nil {
-			return false
-		}
-
-		if !bytes.Equal(wallet.HashPublicKey(input.PubKey), prevTx.Outputs[input.Out].PubKeyHash) {
-			return false
-		}
-
-		r := big.Int{}
-		s := big.Int{}
-		sigLen := len(input.Signature)
-		if sigLen == 0 || sigLen%2 != 0 {
-			return false
-		}
-		r.SetBytes(input.Signature[:sigLen/2])
-		s.SetBytes(input.Signature[sigLen/2:])
-
-		publicKey := ecdsa.PublicKey{
-			Curve: curve,
-			X:     x,
-			Y:     y,
-		}
-		if !ecdsa.Verify(&publicKey, txCopy.ID, &r, &s) {
+		if !tx.verifyInput(inID, input, prevTXs) {
 			return false
 		}
 	}
@@ -307,6 +294,7 @@ func (tx Transaction) IDHex() string {
 // Clone returns a deep copy of the transaction.
 func (tx Transaction) Clone() Transaction {
 	cloned := Transaction{
+		Version: tx.Version,
 		ID:      append([]byte(nil), tx.ID...),
 		Inputs:  make([]TXInput, len(tx.Inputs)),
 		Outputs: make([]TXOutput, len(tx.Outputs)),
@@ -318,12 +306,14 @@ func (tx Transaction) Clone() Transaction {
 			Out:       input.Out,
 			Signature: append([]byte(nil), input.Signature...),
 			PubKey:    append([]byte(nil), input.PubKey...),
+			ScriptSig: input.ScriptSig.Clone(),
 		}
 	}
 	for i, output := range tx.Outputs {
 		cloned.Outputs[i] = TXOutput{
-			Value:      output.Value,
-			PubKeyHash: append([]byte(nil), output.PubKeyHash...),
+			Value:        output.Value,
+			PubKeyHash:   append([]byte(nil), output.PubKeyHash...),
+			ScriptPubKey: output.ScriptPubKey.Clone(),
 		}
 	}
 
@@ -341,16 +331,19 @@ func (tx Transaction) TrimmedCopy() Transaction {
 			Out:       input.Out,
 			Signature: nil,
 			PubKey:    nil,
+			ScriptSig: Script{},
 		})
 	}
 	for _, output := range tx.Outputs {
 		outputs = append(outputs, TXOutput{
-			Value:      output.Value,
-			PubKeyHash: append([]byte(nil), output.PubKeyHash...),
+			Value:        output.Value,
+			PubKeyHash:   append([]byte(nil), output.PubKeyHash...),
+			ScriptPubKey: output.ScriptPubKey.Clone(),
 		})
 	}
 
 	return Transaction{
+		Version: tx.Version,
 		ID:      append([]byte(nil), tx.ID...),
 		Inputs:  inputs,
 		Outputs: outputs,
@@ -397,7 +390,7 @@ func (in TXInput) UsesKey(pubKeyHash []byte) bool {
 
 // IsLockedWith reports whether the output belongs to the given public key hash.
 func (out TXOutput) IsLockedWith(pubKeyHash []byte) bool {
-	return bytes.Equal(out.PubKeyHash, pubKeyHash)
+	return bytes.Equal(out.effectivePubKeyHash(), pubKeyHash)
 }
 
 // TxIDHex returns the referenced transaction ID for CLI printing.
@@ -419,7 +412,96 @@ func (in TXInput) FromDisplay() string {
 
 // Address renders one output as a wallet address string.
 func (out TXOutput) Address() string {
-	return wallet.AddressFromPubKeyHash(out.PubKeyHash)
+	return wallet.AddressFromPubKeyHash(out.effectivePubKeyHash())
+}
+
+func (tx Transaction) UsesScriptVM() bool {
+	return tx.Version >= txVersionScriptVM
+}
+
+func (tx Transaction) signatureHash(inputIndex int, prevTXs map[string]Transaction) []byte {
+	if !tx.UsesScriptVM() {
+		return tx.legacySignatureHash(inputIndex, prevTXs)
+	}
+
+	prevTx := prevTXs[tx.Inputs[inputIndex].TxIDHex()]
+	prevOutput := prevTx.Outputs[tx.Inputs[inputIndex].Out]
+
+	txCopy := tx.TrimmedCopy()
+	txCopy.Inputs[inputIndex].ScriptSig = prevOutput.EffectiveScriptPubKey()
+	return txCopy.Hash()
+}
+
+func (tx Transaction) legacySignatureHash(inputIndex int, prevTXs map[string]Transaction) []byte {
+	prevTx := prevTXs[tx.Inputs[inputIndex].TxIDHex()]
+	txCopy := tx.TrimmedCopy()
+	txCopy.Inputs[inputIndex].PubKey = append([]byte(nil), prevTx.Outputs[tx.Inputs[inputIndex].Out].effectivePubKeyHash()...)
+	txCopy.ID = txCopy.Hash()
+	txCopy.Inputs[inputIndex].PubKey = nil
+	return append([]byte(nil), txCopy.ID...)
+}
+
+func (tx Transaction) verifyInput(inID int, input TXInput, prevTXs map[string]Transaction) bool {
+	prevTx := prevTXs[input.TxIDHex()]
+	if tx.UsesScriptVM() {
+		prevOutput := prevTx.Outputs[input.Out]
+		unlocking := input.EffectiveScriptSig()
+		signature, pubKey, ok := ExtractP2PKHUnlockingData(unlocking)
+		if !ok {
+			return false
+		}
+		if len(input.Signature) > 0 && !bytes.Equal(input.Signature, signature) {
+			return false
+		}
+		if len(input.PubKey) > 0 && !bytes.Equal(input.PubKey, pubKey) {
+			return false
+		}
+		return VerifyScripts(unlocking, prevOutput.EffectiveScriptPubKey(), tx.signatureHash(inID, prevTXs))
+	}
+
+	if !bytes.Equal(wallet.HashPublicKey(input.PubKey), prevTx.Outputs[input.Out].effectivePubKeyHash()) {
+		return false
+	}
+
+	return verifyECDSASignature(input.PubKey, input.Signature, tx.signatureHash(inID, prevTXs))
+}
+
+func (in TXInput) EffectiveScriptSig() Script {
+	if !in.ScriptSig.IsEmpty() {
+		return in.ScriptSig.Clone()
+	}
+	if len(in.Signature) == 0 && len(in.PubKey) == 0 {
+		return Script{}
+	}
+	return NewP2PKHUnlockingScript(in.Signature, in.PubKey)
+}
+
+func (out TXOutput) EffectiveScriptPubKey() Script {
+	if !out.ScriptPubKey.IsEmpty() {
+		return out.ScriptPubKey.Clone()
+	}
+	if len(out.PubKeyHash) == 0 {
+		return Script{}
+	}
+	return NewP2PKHLockingScript(out.PubKeyHash)
+}
+
+func (out TXOutput) effectivePubKeyHash() []byte {
+	if len(out.PubKeyHash) > 0 {
+		return append([]byte(nil), out.PubKeyHash...)
+	}
+	pubKeyHash, ok := ExtractP2PKHPubKeyHash(out.EffectiveScriptPubKey())
+	if !ok {
+		return nil
+	}
+	return pubKeyHash
+}
+
+func serializePublicKey(publicKey *ecdsa.PublicKey) []byte {
+	if publicKey == nil {
+		return nil
+	}
+	return elliptic.Marshal(publicKey.Curve, publicKey.X, publicKey.Y)
 }
 
 func encodeOutputs(outputs []TXOutput) ([]byte, error) {
