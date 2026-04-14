@@ -85,10 +85,17 @@ type CommandResult struct {
 }
 
 type NodeStatus struct {
-	Address      string   `json:"address"`
-	MinerAddress string   `json:"minerAddress"`
-	Peers        []string `json:"peers"`
-	Height       int      `json:"height"`
-	Running      bool     `json:"running"`
-	OrphanCount  int      `json:"orphanCount"`
+	Address      string          `json:"address"`
+	MinerAddress string          `json:"minerAddress"`
+	Peers        []string        `json:"peers"`
+	Height       int             `json:"height"`
+	Running      bool            `json:"running"`
+	OrphanCount  int             `json:"orphanCount"`
+	RecentEvents []NodeEventView `json:"recentEvents"`
+}
+
+type NodeEventView struct {
+	Timestamp string `json:"timestamp"`
+	Kind      string `json:"kind"`
+	Detail    string `json:"detail"`
 }

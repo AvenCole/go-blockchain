@@ -27,7 +27,16 @@ type Node struct {
 	peers          map[string]struct{}
 	orphanBlocks   map[string]blockchain.Block
 	orphanChildren map[string][]string
+	events         []NodeEvent
 }
+
+type NodeEvent struct {
+	Timestamp string
+	Kind      string
+	Detail    string
+}
+
+const maxNodeEvents = 12
 
 // NewNode creates a network node with one listening address and local chain path.
 func NewNode(address, dataDir, minerAddress string) *Node {
@@ -38,6 +47,7 @@ func NewNode(address, dataDir, minerAddress string) *Node {
 		peers:          make(map[string]struct{}),
 		orphanBlocks:   make(map[string]blockchain.Block),
 		orphanChildren: make(map[string][]string),
+		events:         make([]NodeEvent, 0, maxNodeEvents),
 	}
 	node.addPeer(address)
 	return node
@@ -55,6 +65,7 @@ func (n *Node) Listen(ctx context.Context) error {
 	n.Address = ln.Addr().String()
 	n.peers[n.Address] = struct{}{}
 	n.mu.Unlock()
+	n.recordEvent("listen", fmt.Sprintf("listening at %s", n.Address))
 
 	go func() {
 		<-ctx.Done()
@@ -93,6 +104,7 @@ func (n *Node) Connect(peer string) error {
 	if err != nil {
 		return err
 	}
+	n.recordEvent("connect", fmt.Sprintf("send version to %s height=%d", peer, height))
 	return n.send(peer, "version", versionMessage{
 		From:       n.Address,
 		BestHeight: height,
@@ -119,6 +131,15 @@ func (n *Node) OrphanCount() int {
 	return len(n.orphanBlocks)
 }
 
+// RecentEvents returns a snapshot of recent node events, newest first.
+func (n *Node) RecentEvents() []NodeEvent {
+	n.mu.RLock()
+	defer n.mu.RUnlock()
+	events := make([]NodeEvent, len(n.events))
+	copy(events, n.events)
+	return events
+}
+
 // SubmitTransaction creates one local transaction and broadcasts it.
 func (n *Node) SubmitTransaction(from *wallet.Wallet, to string, amount int, fee int) (blockchain.Transaction, error) {
 	n.chainMu.Lock()
@@ -134,6 +155,7 @@ func (n *Node) SubmitTransaction(from *wallet.Wallet, to string, amount int, fee
 	if err != nil {
 		return blockchain.Transaction{}, err
 	}
+	n.recordEvent("tx_submit", fmt.Sprintf("submitted tx %s", tx.IDHex()))
 
 	n.broadcast("tx", txMessage{
 		From: n.Address,
@@ -162,6 +184,7 @@ func (n *Node) MinePending() (*blockchain.Block, error) {
 	if err != nil {
 		return nil, err
 	}
+	n.recordEvent("mine", fmt.Sprintf("mined block height=%d hash=%s", block.Height, block.HashHex()))
 
 	n.broadcast("block", blockMessage{
 		From:  n.Address,
@@ -221,6 +244,7 @@ func (n *Node) handleConn(conn net.Conn) error {
 
 func (n *Node) handleVersion(msg versionMessage) error {
 	n.addPeer(msg.From)
+	n.recordEvent("version", fmt.Sprintf("received version from %s height=%d", msg.From, msg.BestHeight))
 	_ = n.send(msg.From, "addr", addrMessage{From: n.Address, Peers: n.KnownPeers()})
 
 	n.chainMu.Lock()
@@ -241,6 +265,7 @@ func (n *Node) handleVersion(msg versionMessage) error {
 }
 
 func (n *Node) handleAddr(msg addrMessage) error {
+	n.recordEvent("addr", fmt.Sprintf("received %d peers from %s", len(msg.Peers), msg.From))
 	for _, peer := range msg.Peers {
 		n.addPeer(peer)
 	}
@@ -281,6 +306,7 @@ func (n *Node) handleTx(msg txMessage) error {
 	if err := bc.AddToMempool(msg.Tx); err != nil {
 		return nil
 	}
+	n.recordEvent("tx_receive", fmt.Sprintf("received tx %s from %s", msg.Tx.IDHex(), msg.From))
 
 	n.broadcast("tx", msg, msg.From)
 	return nil
@@ -294,6 +320,7 @@ func (n *Node) handleBlock(msg blockMessage) error {
 	if err := n.importOrBufferBlock(msg.From, msg.Block); err != nil {
 		return err
 	}
+	n.recordEvent("block_receive", fmt.Sprintf("received block height=%d from %s", msg.Block.Height, msg.From))
 
 	n.broadcast("block", msg, msg.From)
 	return nil
@@ -364,7 +391,18 @@ func (n *Node) addPeer(peer string) {
 	}
 	n.mu.Lock()
 	defer n.mu.Unlock()
+	_, exists := n.peers[peer]
 	n.peers[peer] = struct{}{}
+	if !exists {
+		n.events = append([]NodeEvent{{
+			Timestamp: time.Now().UTC().Format(time.RFC3339),
+			Kind:      "peer",
+			Detail:    fmt.Sprintf("peer added %s", peer),
+		}}, n.events...)
+		if len(n.events) > maxNodeEvents {
+			n.events = n.events[:maxNodeEvents]
+		}
+	}
 }
 
 func (n *Node) importOrBufferBlock(from string, block blockchain.Block) error {
@@ -373,6 +411,7 @@ func (n *Node) importOrBufferBlock(from string, block blockchain.Block) error {
 		switch {
 		case errors.Is(err, blockchain.ErrOrphanBlock):
 			n.bufferOrphan(block)
+			n.recordEvent("orphan", fmt.Sprintf("buffered orphan height=%d hash=%s", block.Height, block.HashHex()))
 			_ = n.requestMissingParent(from, block.Height)
 			return nil
 		case errors.Is(err, blockchain.ErrInvalidBlock),
@@ -385,6 +424,7 @@ func (n *Node) importOrBufferBlock(from string, block blockchain.Block) error {
 		}
 	}
 
+	n.recordEvent("block_import", fmt.Sprintf("imported block height=%d hash=%s", block.Height, block.HashHex()))
 	n.processOrphanDescendants(from, block.Hash)
 	return nil
 }
@@ -397,6 +437,7 @@ func (n *Node) requestMissingParent(peer string, orphanHeight int) error {
 	if fromHeight < -1 {
 		fromHeight = -1
 	}
+	n.recordEvent("parent_request", fmt.Sprintf("request parent range from %s starting %d", peer, fromHeight))
 	return n.send(peer, "getblocks", getBlocksMessage{
 		From:       n.Address,
 		FromHeight: fromHeight,
@@ -415,10 +456,12 @@ func (n *Node) processOrphanDescendants(from string, parentHash []byte) {
 			if err := blockchain.ImportBlockToDir(n.DataDir, &orphanCopy); err != nil {
 				if errors.Is(err, blockchain.ErrOrphanBlock) {
 					n.bufferOrphan(orphan)
+					n.recordEvent("orphan", fmt.Sprintf("orphan still waiting height=%d hash=%s", orphan.Height, orphan.HashHex()))
 					_ = n.requestMissingParent(from, orphan.Height)
 				}
 				continue
 			}
+			n.recordEvent("orphan_resolved", fmt.Sprintf("resolved orphan height=%d hash=%s", orphan.Height, orphan.HashHex()))
 			queue = append(queue, append([]byte(nil), orphan.Hash...))
 		}
 	}
@@ -471,6 +514,19 @@ func cloneBlock(block *blockchain.Block) *blockchain.Block {
 		clone.Transactions[i] = tx.Clone()
 	}
 	return &clone
+}
+
+func (n *Node) recordEvent(kind, detail string) {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+	n.events = append([]NodeEvent{{
+		Timestamp: time.Now().UTC().Format(time.RFC3339),
+		Kind:      kind,
+		Detail:    detail,
+	}}, n.events...)
+	if len(n.events) > maxNodeEvents {
+		n.events = n.events[:maxNodeEvents]
+	}
 }
 
 func encodePayload(v any) ([]byte, error) {

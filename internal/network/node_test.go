@@ -108,6 +108,11 @@ func TestTransactionAndBlockBroadcast(t *testing.T) {
 		size, err := bc.MempoolSize()
 		return err == nil && size == 1
 	})
+
+	events := nodeA.RecentEvents()
+	if len(events) == 0 {
+		t.Fatalf("len(nodeA.RecentEvents()) = 0, want events")
+	}
 }
 
 func TestNodeBuffersOrphanBlockUntilParentArrives(t *testing.T) {
@@ -171,6 +176,24 @@ func TestNodeBuffersOrphanBlockUntilParentArrives(t *testing.T) {
 	}
 	if height != 2 {
 		t.Fatalf("height after parent = %d, want 2", height)
+	}
+
+	events := nodeB.RecentEvents()
+	foundBuffered := false
+	foundResolved := false
+	for _, event := range events {
+		if event.Kind == "orphan" {
+			foundBuffered = true
+		}
+		if event.Kind == "orphan_resolved" {
+			foundResolved = true
+		}
+	}
+	if !foundBuffered {
+		t.Fatalf("expected orphan buffering event")
+	}
+	if !foundResolved {
+		t.Fatalf("expected orphan resolved event")
 	}
 }
 

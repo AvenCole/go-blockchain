@@ -89,4 +89,11 @@ export type NodeStatus = {
   height: number
   running: boolean
   orphanCount: number
+  recentEvents: NodeEventView[]
+}
+
+export type NodeEventView = {
+  timestamp: string
+  kind: string
+  detail: string
 }

@@ -88,6 +88,9 @@ func TestStartAndStopNodeLifecycle(t *testing.T) {
 	if nodes[0].Address != addr {
 		t.Fatalf("nodes[0].Address = %q, want %q", nodes[0].Address, addr)
 	}
+	if len(nodes[0].RecentEvents) == 0 {
+		t.Fatalf("len(nodes[0].RecentEvents) = 0, want events")
+	}
 
 	if err := service.StopNode(addr); err != nil {
 		t.Fatalf("StopNode() error = %v", err)

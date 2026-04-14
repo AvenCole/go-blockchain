@@ -102,6 +102,15 @@ func (s *Service) Nodes() ([]NodeStatus, error) {
 	statuses := make([]NodeStatus, 0, len(s.nodes))
 	for _, session := range s.nodes {
 		height, _ := blockchain.BestHeight(session.node.DataDir)
+		events := session.node.RecentEvents()
+		eventViews := make([]NodeEventView, 0, len(events))
+		for _, event := range events {
+			eventViews = append(eventViews, NodeEventView{
+				Timestamp: event.Timestamp,
+				Kind:      event.Kind,
+				Detail:    event.Detail,
+			})
+		}
 		statuses = append(statuses, NodeStatus{
 			Address:      session.node.Address,
 			MinerAddress: session.node.MinerAddress,
@@ -109,6 +118,7 @@ func (s *Service) Nodes() ([]NodeStatus, error) {
 			Height:       height,
 			Running:      true,
 			OrphanCount:  session.node.OrphanCount(),
+			RecentEvents: eventViews,
 		})
 	}
 	sort.Slice(statuses, func(i, j int) bool {
