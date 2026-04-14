@@ -3,6 +3,7 @@ package blockchain
 import (
 	"bytes"
 	"crypto/ecdsa"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"os"
@@ -27,6 +28,7 @@ var (
 )
 
 var lastHashKey = []byte("lh")
+var utxoPrefix = []byte("utxo-")
 
 // Blockchain provides chain storage and append operations.
 type Blockchain struct {
@@ -93,15 +95,21 @@ func CreateBlockchain(dataDir string, genesisAddress string) (*Blockchain, error
 		db.Close()
 		return nil, err
 	}
+	if err := applyUTXOChanges(db, batch, genesis); err != nil {
+		db.Close()
+		return nil, err
+	}
 	if err := batch.Commit(pebble.Sync); err != nil {
 		db.Close()
 		return nil, err
 	}
 
-	return &Blockchain{
+	bc := &Blockchain{
 		tip: genesis.Hash,
 		db:  db,
-	}, nil
+	}
+
+	return bc, nil
 }
 
 // OpenBlockchain loads an existing chain from disk.
@@ -121,10 +129,23 @@ func OpenBlockchain(dataDir string) (*Blockchain, error) {
 		return nil, err
 	}
 
-	return &Blockchain{
+	bc := &Blockchain{
 		tip: tip,
 		db:  db,
-	}, nil
+	}
+	ok, err := bc.hasUTXOEntries()
+	if err != nil {
+		bc.Close()
+		return nil, err
+	}
+	if !ok {
+		if err := bc.ReindexUTXO(); err != nil {
+			bc.Close()
+			return nil, err
+		}
+	}
+
+	return bc, nil
 }
 
 // AddBlock appends a new block to the tip of the chain.
@@ -153,6 +174,9 @@ func (bc *Blockchain) AddBlock(transactions []Transaction) (*Block, error) {
 		return nil, err
 	}
 	if err := batch.Set(lastHashKey, newBlock.Hash, nil); err != nil {
+		return nil, err
+	}
+	if err := applyUTXOChanges(bc.db, batch, newBlock); err != nil {
 		return nil, err
 	}
 	if err := batch.Commit(pebble.Sync); err != nil {
@@ -289,50 +313,40 @@ func (bc *Blockchain) BalanceOf(address string) (int, error) {
 
 // FindSpendableOutputs returns spendable outputs for one address.
 func (bc *Blockchain) FindSpendableOutputs(pubKeyHash []byte, amount int) (int, map[string][]int, error) {
-	blocks, err := bc.Blocks()
-	if err != nil {
-		return 0, nil, err
-	}
-
-	spentTXOs := make(map[string]map[int]bool)
 	unspent := make(map[string][]int)
 	accumulated := 0
 
-	for _, block := range blocks {
-		for _, tx := range block.Transactions {
-			txID := tx.IDHex()
+	iter, err := bc.db.NewIter(&pebble.IterOptions{
+		LowerBound: utxoPrefix,
+		UpperBound: prefixUpperBound(utxoPrefix),
+	})
+	if err != nil {
+		return 0, nil, err
+	}
+	defer iter.Close()
 
-			for outIdx, output := range tx.Outputs {
-				if spentTXOs[txID] != nil && spentTXOs[txID][outIdx] {
-					continue
-				}
-				if !output.IsLockedWith(pubKeyHash) {
-					continue
-				}
+	for iter.First(); iter.Valid(); iter.Next() {
+		txIDHex := hex.EncodeToString(iter.Key()[len(utxoPrefix):])
+		outputs, err := decodeCachedUTXOs(iter.Value())
+		if err != nil {
+			return 0, nil, err
+		}
 
-				accumulated += output.Value
-				unspent[txID] = append(unspent[txID], outIdx)
-				if accumulated >= amount {
-					return accumulated, unspent, nil
-				}
-			}
-
-			if tx.IsCoinbase() {
+		for _, cached := range outputs {
+			if !cached.Output.IsLockedWith(pubKeyHash) {
 				continue
 			}
 
-			for _, input := range tx.Inputs {
-				if !input.UsesKey(pubKeyHash) {
-					continue
-				}
-
-				inputTxID := input.TxIDHex()
-				if spentTXOs[inputTxID] == nil {
-					spentTXOs[inputTxID] = make(map[int]bool)
-				}
-				spentTXOs[inputTxID][input.Out] = true
+			accumulated += cached.Output.Value
+			unspent[txIDHex] = append(unspent[txIDHex], cached.Index)
+			if accumulated >= amount {
+				return accumulated, unspent, nil
 			}
 		}
+	}
+
+	if err := iter.Error(); err != nil {
+		return 0, nil, err
 	}
 
 	return accumulated, unspent, nil
@@ -340,13 +354,90 @@ func (bc *Blockchain) FindSpendableOutputs(pubKeyHash []byte, amount int) (int, 
 
 // FindUTXO returns all currently unspent outputs for one address.
 func (bc *Blockchain) FindUTXO(pubKeyHash []byte) ([]TXOutput, error) {
+	iter, err := bc.db.NewIter(&pebble.IterOptions{
+		LowerBound: utxoPrefix,
+		UpperBound: prefixUpperBound(utxoPrefix),
+	})
+	if err != nil {
+		return nil, err
+	}
+	defer iter.Close()
+
+	var utxos []TXOutput
+
+	for iter.First(); iter.Valid(); iter.Next() {
+		outputs, err := decodeCachedUTXOs(iter.Value())
+		if err != nil {
+			return nil, err
+		}
+
+		for _, cached := range outputs {
+			if cached.Output.IsLockedWith(pubKeyHash) {
+				utxos = append(utxos, cached.Output)
+			}
+		}
+	}
+
+	if err := iter.Error(); err != nil {
+		return nil, err
+	}
+
+	return utxos, nil
+}
+
+// ReindexUTXO rebuilds the cached UTXO set from the full chain.
+func (bc *Blockchain) ReindexUTXO() error {
+	iter, err := bc.db.NewIter(&pebble.IterOptions{
+		LowerBound: utxoPrefix,
+		UpperBound: prefixUpperBound(utxoPrefix),
+	})
+	if err != nil {
+		return err
+	}
+	defer iter.Close()
+
+	batch := bc.db.NewBatch()
+	defer batch.Close()
+
+	for iter.First(); iter.Valid(); iter.Next() {
+		if err := batch.Delete(append([]byte(nil), iter.Key()...), nil); err != nil {
+			return err
+		}
+	}
+	if err := iter.Error(); err != nil {
+		return err
+	}
+
+	utxoMap, err := bc.findAllUTXOByScan()
+	if err != nil {
+		return err
+	}
+
+	for txIDHex, outputs := range utxoMap {
+		txID, err := hex.DecodeString(txIDHex)
+		if err != nil {
+			return err
+		}
+		encoded, err := encodeCachedUTXOs(outputs)
+		if err != nil {
+			return err
+		}
+		if err := batch.Set(utxoKey(txID), encoded, nil); err != nil {
+			return err
+		}
+	}
+
+	return batch.Commit(pebble.Sync)
+}
+
+func (bc *Blockchain) findAllUTXOByScan() (map[string][]CachedUTXO, error) {
 	blocks, err := bc.Blocks()
 	if err != nil {
 		return nil, err
 	}
 
 	spentTXOs := make(map[string]map[int]bool)
-	var utxos []TXOutput
+	utxoMap := make(map[string][]CachedUTXO)
 
 	for _, block := range blocks {
 		for _, tx := range block.Transactions {
@@ -356,9 +447,10 @@ func (bc *Blockchain) FindUTXO(pubKeyHash []byte) ([]TXOutput, error) {
 				if spentTXOs[txID] != nil && spentTXOs[txID][outIdx] {
 					continue
 				}
-				if output.IsLockedWith(pubKeyHash) {
-					utxos = append(utxos, output)
-				}
+				utxoMap[txID] = append(utxoMap[txID], CachedUTXO{
+					Index:  outIdx,
+					Output: output,
+				})
 			}
 
 			if tx.IsCoinbase() {
@@ -366,10 +458,6 @@ func (bc *Blockchain) FindUTXO(pubKeyHash []byte) ([]TXOutput, error) {
 			}
 
 			for _, input := range tx.Inputs {
-				if !input.UsesKey(pubKeyHash) {
-					continue
-				}
-
 				inputTxID := input.TxIDHex()
 				if spentTXOs[inputTxID] == nil {
 					spentTXOs[inputTxID] = make(map[int]bool)
@@ -379,7 +467,7 @@ func (bc *Blockchain) FindUTXO(pubKeyHash []byte) ([]TXOutput, error) {
 		}
 	}
 
-	return utxos, nil
+	return utxoMap, nil
 }
 
 // Close releases the underlying database handle.
@@ -431,6 +519,91 @@ func loadValue(db *pebble.DB, key []byte) ([]byte, error) {
 
 	copyValue := append([]byte(nil), value...)
 	return copyValue, nil
+}
+
+func utxoKey(txID []byte) []byte {
+	return append(append([]byte(nil), utxoPrefix...), txID...)
+}
+
+func prefixUpperBound(prefix []byte) []byte {
+	upper := append([]byte(nil), prefix...)
+	upper[len(upper)-1]++
+	return upper
+}
+
+func (bc *Blockchain) hasUTXOEntries() (bool, error) {
+	iter, err := bc.db.NewIter(&pebble.IterOptions{
+		LowerBound: utxoPrefix,
+		UpperBound: prefixUpperBound(utxoPrefix),
+	})
+	if err != nil {
+		return false, err
+	}
+	defer iter.Close()
+
+	return iter.First(), nil
+}
+
+func applyUTXOChanges(db *pebble.DB, batch *pebble.Batch, block *Block) error {
+	for _, tx := range block.Transactions {
+		if !tx.IsCoinbase() {
+			for _, input := range tx.Inputs {
+				key := utxoKey(input.TxID)
+				encoded, err := loadValue(db, key)
+				if err != nil {
+					return err
+				}
+				cached, err := decodeCachedUTXOs(encoded)
+				if err != nil {
+					return err
+				}
+
+				var remaining []CachedUTXO
+				found := false
+				for _, item := range cached {
+					if item.Index == input.Out {
+						found = true
+						continue
+					}
+					remaining = append(remaining, item)
+				}
+				if !found {
+					return ErrInvalidTransaction
+				}
+
+				if len(remaining) == 0 {
+					if err := batch.Delete(key, nil); err != nil {
+						return err
+					}
+				} else {
+					encodedRemaining, err := encodeCachedUTXOs(remaining)
+					if err != nil {
+						return err
+					}
+					if err := batch.Set(key, encodedRemaining, nil); err != nil {
+						return err
+					}
+				}
+			}
+		}
+
+		cached := make([]CachedUTXO, 0, len(tx.Outputs))
+		for idx, output := range tx.Outputs {
+			cached = append(cached, CachedUTXO{
+				Index:  idx,
+				Output: output,
+			})
+		}
+		encodedOutputs, err := encodeCachedUTXOs(cached)
+		if err != nil {
+			return err
+		}
+		if err := batch.Set(utxoKey(tx.ID), encodedOutputs, nil); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 type quietLogger struct{}

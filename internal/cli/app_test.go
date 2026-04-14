@@ -52,7 +52,7 @@ func TestRunDoctor(t *testing.T) {
 		t.Fatalf("Run(doctor) exit code = %d, want 0", code)
 	}
 
-	if !strings.Contains(stdout.String(), "next_step=implement UTXO cache") {
+	if !strings.Contains(stdout.String(), "next_step=implement merkle tree") {
 		t.Fatalf("doctor output missing next step: %q", stdout.String())
 	}
 }
@@ -84,6 +84,36 @@ func TestCreateWalletAndListAddresses(t *testing.T) {
 
 	if !strings.Contains(stdout.String(), address) {
 		t.Fatalf("listaddresses output = %q, want %q", stdout.String(), address)
+	}
+}
+
+func TestReindexUTXO(t *testing.T) {
+	cfg := config.Default()
+	cfg.DataDir = filepath.Join(t.TempDir(), "data")
+
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	app := NewApp(cfg, &stdout, &stderr)
+
+	if code := app.Run([]string{"createwallet"}); code != 0 {
+		t.Fatalf("createwallet exit code = %d, stderr=%q", code, stderr.String())
+	}
+	address := strings.TrimPrefix(strings.TrimSpace(stdout.String()), "created wallet address=")
+	stdout.Reset()
+	stderr.Reset()
+
+	if code := app.Run([]string{"createblockchain", address}); code != 0 {
+		t.Fatalf("createblockchain exit code = %d, stderr=%q", code, stderr.String())
+	}
+
+	stdout.Reset()
+	stderr.Reset()
+	if code := app.Run([]string{"reindexutxo"}); code != 0 {
+		t.Fatalf("reindexutxo exit code = %d, stderr=%q", code, stderr.String())
+	}
+
+	if !strings.Contains(stdout.String(), "utxo set reindexed") {
+		t.Fatalf("reindexutxo output = %q", stdout.String())
 	}
 }
 
