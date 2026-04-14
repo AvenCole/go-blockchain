@@ -13,6 +13,7 @@
 - Plan 1：项目初始化，已完成
 - Plan 2：基础区块与区块链，已完成
 - Plan 3：最简交易模型，已完成
+- Plan 4：钱包系统，已完成
 
 ## 仓库结构
 
@@ -72,6 +73,10 @@ go run ./cmd/go-blockchain doctor
 
 解释最简交易模型如何落地，包括交易结构、coinbase 原型交易、区块内交易存储、CLI 演示方式和当前简化边界。
 
+### 6. `docs/plan/plan4.md`
+
+解释钱包系统如何落地，包括密钥生成、地址生成、钱包持久化、多钱包管理和 CLI 使用方式。
+
 ## 开发原则
 
 1. 每个阶段先明确边界，再落地实现。
@@ -82,15 +87,15 @@ go run ./cmd/go-blockchain doctor
 
 ## 下一步
 
-当前将进入 Plan 3：最简交易模型。
+当前将进入 Plan 4：钱包系统。
 
 这个阶段会开始建立：
 
-1. `Transaction`
-2. `TXInput`
-3. `TXOutput`
-4. coinbase 原型交易
-5. 普通无签名转账
-6. 区块内交易列表存储
+1. `Wallet`
+2. 地址生成
+3. 钱包持久化
+4. 多钱包管理
+5. `createwallet`
+6. `listaddresses`
 
 后续实现时会继续同步补充代码和文档。

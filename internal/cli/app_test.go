@@ -57,6 +57,36 @@ func TestRunDoctor(t *testing.T) {
 	}
 }
 
+func TestCreateWalletAndListAddresses(t *testing.T) {
+	cfg := config.Default()
+	cfg.DataDir = filepath.Join(t.TempDir(), "data")
+
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	app := NewApp(cfg, &stdout, &stderr)
+
+	if code := app.Run([]string{"createwallet"}); code != 0 {
+		t.Fatalf("createwallet exit code = %d, stderr=%q", code, stderr.String())
+	}
+
+	created := stdout.String()
+	if !strings.Contains(created, "created wallet address=") {
+		t.Fatalf("createwallet output = %q", created)
+	}
+
+	address := strings.TrimPrefix(strings.TrimSpace(created), "created wallet address=")
+	stdout.Reset()
+	stderr.Reset()
+
+	if code := app.Run([]string{"listaddresses"}); code != 0 {
+		t.Fatalf("listaddresses exit code = %d, stderr=%q", code, stderr.String())
+	}
+
+	if !strings.Contains(stdout.String(), address) {
+		t.Fatalf("listaddresses output = %q, want %q", stdout.String(), address)
+	}
+}
+
 func TestCreateBlockchainAddBlockAndPrintChain(t *testing.T) {
 	cfg := config.Default()
 	cfg.DataDir = filepath.Join(t.TempDir(), "data")
