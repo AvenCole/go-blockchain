@@ -12,6 +12,10 @@ export function Dashboard():Promise<gui.DashboardData>;
 
 export function ExecuteCLI(arg1:string):Promise<gui.CommandResult>;
 
+export function InitializeNodeBlockchain(arg1:string,arg2:string):Promise<void>;
+
+export function MineNodePending(arg1:string):Promise<string>;
+
 export function MinePending(arg1:string):Promise<string>;
 
 export function MultiSigOutputs():Promise<Array<gui.MultiSigOutputView>>;
@@ -31,5 +35,7 @@ export function QueueTransaction(arg1:string,arg2:string,arg3:number,arg4:number
 export function StartNode(arg1:string,arg2:string,arg3:string):Promise<string>;
 
 export function StopNode(arg1:string):Promise<void>;
+
+export function SubmitNodeTransaction(arg1:string,arg2:string,arg3:string,arg4:number,arg5:number):Promise<string>;
 
 export function Wallets():Promise<Array<gui.WalletView>>;

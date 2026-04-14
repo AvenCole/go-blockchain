@@ -4,7 +4,9 @@ import {
   CreateWallet,
   Dashboard,
   ExecuteCLI,
+  InitializeNodeBlockchain,
   MinePending,
+  MineNodePending,
   MultiSigOutputs,
   Nodes,
   PendingTransactions,
@@ -14,6 +16,7 @@ import {
   QueueMultiSigTransaction,
   StartNode,
   StopNode,
+  SubmitNodeTransaction,
   Wallets,
 } from '../../wailsjs/go/main/App'
 import type { BlockView, CommandResult, DashboardData, MultiSigOutputView, NodeStatus, WalletView } from '../types'
@@ -49,3 +52,13 @@ export const fetchNodes = (): Promise<NodeStatus[]> => Nodes()
 export const startNode = (address: string, seed: string, miner: string): Promise<string> => StartNode(address, seed, miner)
 export const stopNode = (address: string): Promise<void> => StopNode(address)
 export const connectNode = (address: string, seed: string): Promise<void> => ConnectNode(address, seed)
+export const initializeNodeBlockchain = (address: string, rewardAddress: string): Promise<void> =>
+  InitializeNodeBlockchain(address, rewardAddress)
+export const submitNodeTransaction = (
+  nodeAddress: string,
+  from: string,
+  to: string,
+  amount: number,
+  fee: number,
+): Promise<string> => SubmitNodeTransaction(nodeAddress, from, to, amount, fee)
+export const mineNodePending = (address: string): Promise<string> => MineNodePending(address)

@@ -46,13 +46,16 @@ import {
   fetchNodes,
   fetchPendingTransactions,
   fetchWallets,
+  initializeNodeBlockchain,
   minePending,
+  mineNodePending,
   queueMultiSigTransaction,
   queueP2PKTransaction,
   queueSpendMultiSigTransaction,
   queueTransaction,
   startNode,
   stopNode,
+  submitNodeTransaction,
 } from './api/backend'
 import type { BlockView, CommandResult, DashboardData, MultiSigOutputView, NodeStatus, WalletView } from './types'
 
@@ -105,6 +108,14 @@ function App() {
   const [history, setHistory] = useState<CommandResult[]>([])
   const [nodeForm, setNodeForm] = useState({ address: '127.0.0.1:3010', seed: '', miner: '' })
   const [connectForm, setConnectForm] = useState({ address: '', seed: '' })
+  const [nodeControlForm, setNodeControlForm] = useState({
+    address: '',
+    rewardAddress: '',
+    from: '',
+    to: '',
+    amount: '10',
+    fee: '1',
+  })
 
   const refresh = async () => {
     try {
@@ -142,6 +153,18 @@ function App() {
       }
       if (!connectForm.address && nodeList.length > 0) {
         setConnectForm((prev) => ({ ...prev, address: nodeList[0].address }))
+      }
+      if ((!nodeControlForm.address || !nodeList.some((node) => node.address === nodeControlForm.address)) && nodeList.length > 0) {
+        setNodeControlForm((prev) => ({ ...prev, address: nodeList[0].address }))
+      }
+      if (!nodeControlForm.rewardAddress && walletList.length > 0) {
+        setNodeControlForm((prev) => ({ ...prev, rewardAddress: walletList[0].address }))
+      }
+      if (!nodeControlForm.from && walletList.length > 0) {
+        setNodeControlForm((prev) => ({ ...prev, from: walletList[0].address }))
+      }
+      if (!nodeControlForm.to && walletList.length > 1) {
+        setNodeControlForm((prev) => ({ ...prev, to: walletList[1].address }))
       }
       if (!spendMultiSigForm.to && walletList.length > 0) {
         setSpendMultiSigForm((prev) => ({ ...prev, to: walletList[0].address }))
@@ -337,6 +360,45 @@ function App() {
     }
   }
 
+  const handleInitializeNodeBlockchain = async () => {
+    try {
+      setError('')
+      await initializeNodeBlockchain(nodeControlForm.address, nodeControlForm.rewardAddress)
+      setMessage(`节点区块链已就绪：${nodeControlForm.address}`)
+      await refresh()
+    } catch (err) {
+      setError(String(err))
+    }
+  }
+
+  const handleSubmitNodeTransaction = async () => {
+    try {
+      setError('')
+      const txid = await submitNodeTransaction(
+        nodeControlForm.address,
+        nodeControlForm.from,
+        nodeControlForm.to,
+        Number(nodeControlForm.amount),
+        Number(nodeControlForm.fee || '0'),
+      )
+      setMessage(`节点交易已进入 Mempool：${txid}`)
+      await refresh()
+    } catch (err) {
+      setError(String(err))
+    }
+  }
+
+  const handleMineNode = async () => {
+    try {
+      setError('')
+      const hash = await mineNodePending(nodeControlForm.address)
+      setMessage(`节点已挖出新区块：${hash}`)
+      await refresh()
+    } catch (err) {
+      setError(String(err))
+    }
+  }
+
   const handleSpendMultiSig = async () => {
     try {
       setError('')
@@ -507,15 +569,21 @@ function App() {
                   <CardContent>
                     <NetworkPage
                       nodes={nodes}
+                      wallets={wallets}
                       lastReorg={dashboard?.lastReorg ?? null}
                       recentEvents={dashboard?.recentEvents ?? []}
                       nodeForm={nodeForm}
                       setNodeForm={setNodeForm}
                       connectForm={connectForm}
                       setConnectForm={setConnectForm}
+                      nodeControlForm={nodeControlForm}
+                      setNodeControlForm={setNodeControlForm}
                       onStartNode={handleStartNode}
                       onStopNode={handleStopNode}
                       onConnectNode={handleConnectNode}
+                      onInitializeNodeBlockchain={handleInitializeNodeBlockchain}
+                      onSubmitNodeTransaction={handleSubmitNodeTransaction}
+                      onMineNode={handleMineNode}
                     />
                   </CardContent>
                 </Card>

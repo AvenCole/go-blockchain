@@ -83,3 +83,15 @@ func (a *App) Nodes() ([]gui.NodeStatus, error) {
 func (a *App) ConnectNode(address, seed string) error {
 	return a.service.ConnectNode(address, seed)
 }
+
+func (a *App) InitializeNodeBlockchain(address, rewardAddress string) error {
+	return a.service.InitializeNodeBlockchain(address, rewardAddress)
+}
+
+func (a *App) SubmitNodeTransaction(nodeAddress, from, to string, amount int, fee int) (string, error) {
+	return a.service.SubmitNodeTransaction(nodeAddress, from, to, amount, fee)
+}
+
+func (a *App) MineNodePending(address string) (string, error) {
+	return a.service.MineNodePending(address)
+}

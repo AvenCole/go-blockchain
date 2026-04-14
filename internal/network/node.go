@@ -36,6 +36,12 @@ type NodeEvent struct {
 	Detail    string
 }
 
+type ChainSnapshot struct {
+	Initialized  bool
+	Height       int
+	MempoolCount int
+}
+
 const maxNodeEvents = 12
 
 // NewNode creates a network node with one listening address and local chain path.
@@ -138,6 +144,64 @@ func (n *Node) RecentEvents() []NodeEvent {
 	events := make([]NodeEvent, len(n.events))
 	copy(events, n.events)
 	return events
+}
+
+// EnsureBlockchain initializes one local chain when the node has none yet.
+func (n *Node) EnsureBlockchain(genesisAddress string) error {
+	n.chainMu.Lock()
+	defer n.chainMu.Unlock()
+
+	exists, err := blockchain.ChainExists(n.DataDir)
+	if err != nil {
+		return err
+	}
+	if exists {
+		return nil
+	}
+
+	bc, err := blockchain.CreateBlockchain(n.DataDir, genesisAddress)
+	if err != nil {
+		return err
+	}
+	defer bc.Close()
+
+	n.recordEvent("chain_init", fmt.Sprintf("initialized local chain reward=%s", genesisAddress))
+	return nil
+}
+
+// ChainSnapshot returns safe chain status information for one node.
+func (n *Node) ChainSnapshot() (ChainSnapshot, error) {
+	n.chainMu.Lock()
+	defer n.chainMu.Unlock()
+
+	snapshot := ChainSnapshot{Height: -1}
+	exists, err := blockchain.ChainExists(n.DataDir)
+	if err != nil {
+		return snapshot, err
+	}
+	if !exists {
+		return snapshot, nil
+	}
+
+	bc, err := blockchain.OpenBlockchain(n.DataDir)
+	if err != nil {
+		return snapshot, err
+	}
+	defer bc.Close()
+
+	height, err := bc.Height()
+	if err != nil {
+		return snapshot, err
+	}
+	mempoolCount, err := bc.MempoolSize()
+	if err != nil {
+		return snapshot, err
+	}
+
+	snapshot.Initialized = true
+	snapshot.Height = height
+	snapshot.MempoolCount = mempoolCount
+	return snapshot, nil
 }
 
 // SubmitTransaction creates one local transaction and broadcasts it.

@@ -285,7 +285,9 @@ export namespace gui {
 	    address: string;
 	    minerAddress: string;
 	    peers: string[];
+	    initialized: boolean;
 	    height: number;
+	    mempoolCount: number;
 	    running: boolean;
 	    orphanCount: number;
 	    recentEvents: NodeEventView[];
@@ -299,7 +301,9 @@ export namespace gui {
 	        this.address = source["address"];
 	        this.minerAddress = source["minerAddress"];
 	        this.peers = source["peers"];
+	        this.initialized = source["initialized"];
 	        this.height = source["height"];
+	        this.mempoolCount = source["mempoolCount"];
 	        this.running = source["running"];
 	        this.orphanCount = source["orphanCount"];
 	        this.recentEvents = this.convertValues(source["recentEvents"], NodeEventView);

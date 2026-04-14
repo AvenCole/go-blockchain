@@ -257,6 +257,14 @@ go run ./cmd/go-blockchain spendmultisig <addr1,addr2> <source-txid> 0 <to> 10 1
 2. 节点在导入新区块推进 tip 后也会主动通告
 3. 这样网络同步不再只是被动请求，还有主动提示行为
 
+### 5.13 GUI 节点链控制
+
+讲解重点：
+
+1. GUI 网络页现在不只是看节点状态，还能直接初始化某个节点的本地链
+2. 可以指定一个节点直接发交易、直接挖矿
+3. GUI 控制台也支持 `nodeinit`、`nodesend`、`nodemine`，适合同时演示图形界面和终端链路
+
 ### 6. GUI 演示
 
 直接打开桌面程序：

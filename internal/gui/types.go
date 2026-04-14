@@ -97,7 +97,9 @@ type NodeStatus struct {
 	Address      string          `json:"address"`
 	MinerAddress string          `json:"minerAddress"`
 	Peers        []string        `json:"peers"`
+	Initialized  bool            `json:"initialized"`
 	Height       int             `json:"height"`
+	MempoolCount int             `json:"mempoolCount"`
 	Running      bool            `json:"running"`
 	OrphanCount  int             `json:"orphanCount"`
 	RecentEvents []NodeEventView `json:"recentEvents"`

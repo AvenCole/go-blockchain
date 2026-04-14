@@ -53,6 +53,9 @@
 - [ ] 最近链事件中能看到 genesis / main_block / fork_block / reorg
 - [ ] 网络页能显示节点最近网络事件
 - [ ] 网络事件中能看到 tip_announce
+- [ ] 网络页可直接初始化指定节点的区块链
+- [ ] 网络页可直接通过指定节点发交易并挖矿
+- [ ] GUI 控制台支持 nodeinit / nodesend / nodemine
 - [ ] CLI 可演示 P2PK 脚本模板
 - [ ] CLI 可演示多重签名流程
 - [ ] GUI 交易页可切换脚本模板

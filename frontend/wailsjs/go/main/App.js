@@ -22,6 +22,14 @@ export function ExecuteCLI(arg1) {
   return window['go']['main']['App']['ExecuteCLI'](arg1);
 }
 
+export function InitializeNodeBlockchain(arg1, arg2) {
+  return window['go']['main']['App']['InitializeNodeBlockchain'](arg1, arg2);
+}
+
+export function MineNodePending(arg1) {
+  return window['go']['main']['App']['MineNodePending'](arg1);
+}
+
 export function MinePending(arg1) {
   return window['go']['main']['App']['MinePending'](arg1);
 }
@@ -60,6 +68,10 @@ export function StartNode(arg1, arg2, arg3) {
 
 export function StopNode(arg1) {
   return window['go']['main']['App']['StopNode'](arg1);
+}
+
+export function SubmitNodeTransaction(arg1, arg2, arg3, arg4, arg5) {
+  return window['go']['main']['App']['SubmitNodeTransaction'](arg1, arg2, arg3, arg4, arg5);
 }
 
 export function Wallets() {

@@ -23,7 +23,7 @@ function ConsolePage({ command, setCommand, history, onExecute }: ConsolePagePro
               label="Command"
               value={command}
               onChange={(e) => setCommand(e.target.value)}
-              placeholder="例如: createwallet / printchain / runperf 10"
+              placeholder="例如: createwallet / nodeinit <node> / nodesend <node> <from> <to> 10 1"
             />
             <Button variant="contained" onClick={onExecute}>
               执行
@@ -48,7 +48,7 @@ function ConsolePage({ command, setCommand, history, onExecute }: ConsolePagePro
         <Stack spacing={2}>
           {history.length === 0 ? (
             <Typography sx={{ color: '#8adf8a' }}>
-              尚无命令输出。可以先尝试：createwallet
+              尚无命令输出。可以先尝试：createwallet 或 nodes
             </Typography>
           ) : (
             history.map((item, index) => (

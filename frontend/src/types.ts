@@ -95,7 +95,9 @@ export type NodeStatus = {
   address: string
   minerAddress: string
   peers: string[]
+  initialized: boolean
   height: number
+  mempoolCount: number
   running: boolean
   orphanCount: number
   recentEvents: NodeEventView[]

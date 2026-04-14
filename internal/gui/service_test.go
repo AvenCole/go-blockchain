@@ -1,6 +1,7 @@
 package gui
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -225,5 +226,147 @@ func TestQueueP2PKAndMultiSigTransactions(t *testing.T) {
 	}
 	if len(pending) != 1 {
 		t.Fatalf("len(pending) = %d, want 1", len(pending))
+	}
+}
+
+func TestNodeControlWorkflow(t *testing.T) {
+	t.Setenv(guiDataDirEnv, t.TempDir())
+
+	service := NewService()
+	minerAddr, err := service.CreateWallet()
+	if err != nil {
+		t.Fatalf("CreateWallet(miner) error = %v", err)
+	}
+	aliceAddr, err := service.CreateWallet()
+	if err != nil {
+		t.Fatalf("CreateWallet(alice) error = %v", err)
+	}
+
+	addr, err := service.StartNode("127.0.0.1:0", "", minerAddr)
+	if err != nil {
+		t.Fatalf("StartNode() error = %v", err)
+	}
+	t.Cleanup(func() { _ = service.StopNode(addr) })
+
+	nodes, err := service.Nodes()
+	if err != nil {
+		t.Fatalf("Nodes() before init error = %v", err)
+	}
+	if len(nodes) != 1 {
+		t.Fatalf("len(nodes) before init = %d, want 1", len(nodes))
+	}
+	if nodes[0].Initialized {
+		t.Fatalf("nodes[0].Initialized before init = true, want false")
+	}
+
+	if err := service.InitializeNodeBlockchain(addr, ""); err != nil {
+		t.Fatalf("InitializeNodeBlockchain() error = %v", err)
+	}
+
+	nodes, err = service.Nodes()
+	if err != nil {
+		t.Fatalf("Nodes() after init error = %v", err)
+	}
+	if !nodes[0].Initialized {
+		t.Fatalf("nodes[0].Initialized after init = false, want true")
+	}
+	if nodes[0].Height != 0 {
+		t.Fatalf("nodes[0].Height after init = %d, want 0", nodes[0].Height)
+	}
+
+	txid, err := service.SubmitNodeTransaction(addr, minerAddr, aliceAddr, 20, 1)
+	if err != nil {
+		t.Fatalf("SubmitNodeTransaction() error = %v", err)
+	}
+	if txid == "" {
+		t.Fatalf("SubmitNodeTransaction() returned empty txid")
+	}
+
+	nodes, err = service.Nodes()
+	if err != nil {
+		t.Fatalf("Nodes() after submit error = %v", err)
+	}
+	if nodes[0].MempoolCount != 1 {
+		t.Fatalf("nodes[0].MempoolCount after submit = %d, want 1", nodes[0].MempoolCount)
+	}
+
+	hash, err := service.MineNodePending(addr)
+	if err != nil {
+		t.Fatalf("MineNodePending() error = %v", err)
+	}
+	if hash == "" {
+		t.Fatalf("MineNodePending() returned empty hash")
+	}
+
+	nodes, err = service.Nodes()
+	if err != nil {
+		t.Fatalf("Nodes() after mine error = %v", err)
+	}
+	if nodes[0].Height != 1 {
+		t.Fatalf("nodes[0].Height after mine = %d, want 1", nodes[0].Height)
+	}
+	if nodes[0].MempoolCount != 0 {
+		t.Fatalf("nodes[0].MempoolCount after mine = %d, want 0", nodes[0].MempoolCount)
+	}
+
+	foundInit := false
+	foundSubmit := false
+	for _, event := range nodes[0].RecentEvents {
+		if event.Kind == "chain_init" {
+			foundInit = true
+		}
+		if event.Kind == "tx_submit" {
+			foundSubmit = true
+		}
+	}
+	if !foundInit {
+		t.Fatalf("expected chain_init event in node recent events")
+	}
+	if !foundSubmit {
+		t.Fatalf("expected tx_submit event in node recent events")
+	}
+}
+
+func TestConsoleNodeCommands(t *testing.T) {
+	t.Setenv(guiDataDirEnv, t.TempDir())
+
+	service := NewService()
+	minerAddr, err := service.CreateWallet()
+	if err != nil {
+		t.Fatalf("CreateWallet(miner) error = %v", err)
+	}
+	aliceAddr, err := service.CreateWallet()
+	if err != nil {
+		t.Fatalf("CreateWallet(alice) error = %v", err)
+	}
+
+	addr, err := service.StartNode("127.0.0.1:0", "", minerAddr)
+	if err != nil {
+		t.Fatalf("StartNode() error = %v", err)
+	}
+	t.Cleanup(func() { _ = service.StopNode(addr) })
+
+	result, err := service.ExecuteCLI(fmt.Sprintf("nodeinit %s", addr))
+	if err != nil {
+		t.Fatalf("ExecuteCLI(nodeinit) error = %v", err)
+	}
+	if !strings.Contains(result.Stdout, "node chain ready") {
+		t.Fatalf("nodeinit stdout = %q, want ready message", result.Stdout)
+	}
+
+	result, err = service.ExecuteCLI(fmt.Sprintf("nodesend %s %s %s 10 1", addr, minerAddr, aliceAddr))
+	if err != nil {
+		t.Fatalf("ExecuteCLI(nodesend) error = %v", err)
+	}
+	if !strings.Contains(result.Stdout, "node transaction queued") {
+		t.Fatalf("nodesend stdout = %q, want queued message", result.Stdout)
+	}
+
+	result, err = service.ExecuteCLI(fmt.Sprintf("nodemine %s", addr))
+	if err != nil {
+		t.Fatalf("ExecuteCLI(nodemine) error = %v", err)
+	}
+	if !strings.Contains(result.Stdout, "node mined block") {
+		t.Fatalf("nodemine stdout = %q, want mined message", result.Stdout)
 	}
 }
