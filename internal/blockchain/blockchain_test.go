@@ -8,7 +8,7 @@ import (
 func TestCreateBlockchainAndIterate(t *testing.T) {
 	dataDir := filepath.Join(t.TempDir(), "data")
 
-	created, err := CreateBlockchain(dataDir, "genesis")
+	created, err := CreateBlockchain(dataDir, "miner")
 	if err != nil {
 		t.Fatalf("CreateBlockchain() error = %v", err)
 	}
@@ -25,13 +25,17 @@ func TestCreateBlockchainAndIterate(t *testing.T) {
 		t.Fatalf("genesis height = %d, want 0", first.Height)
 	}
 
-	if string(first.Data) != "genesis" {
-		t.Fatalf("genesis data = %q, want %q", string(first.Data), "genesis")
+	if len(first.Transactions) != 1 {
+		t.Fatalf("len(genesis.Transactions) = %d, want 1", len(first.Transactions))
 	}
 
-	added, err := created.AddBlock("block-1")
+	if !first.Transactions[0].IsCoinbase() {
+		t.Fatalf("genesis transaction should be coinbase")
+	}
+
+	added, tx, err := created.SendTransaction("alice", "bob", 10)
 	if err != nil {
-		t.Fatalf("AddBlock() error = %v", err)
+		t.Fatalf("SendTransaction() error = %v", err)
 	}
 
 	if added.Height != 1 {
@@ -47,19 +51,19 @@ func TestCreateBlockchainAndIterate(t *testing.T) {
 		t.Fatalf("len(Blocks()) = %d, want 2", len(blocks))
 	}
 
-	if string(blocks[0].Data) != "block-1" {
-		t.Fatalf("latest block data = %q, want %q", string(blocks[0].Data), "block-1")
+	if len(blocks[0].Transactions) != 1 {
+		t.Fatalf("len(blocks[0].Transactions) = %d, want 1", len(blocks[0].Transactions))
 	}
 
-	if string(blocks[1].Data) != "genesis" {
-		t.Fatalf("genesis block data = %q, want %q", string(blocks[1].Data), "genesis")
+	if blocks[0].Transactions[0].IDHex() != tx.IDHex() {
+		t.Fatalf("latest tx id = %s, want %s", blocks[0].Transactions[0].IDHex(), tx.IDHex())
 	}
 }
 
 func TestOpenBlockchain(t *testing.T) {
 	dataDir := filepath.Join(t.TempDir(), "data")
 
-	created, err := CreateBlockchain(dataDir, "genesis")
+	created, err := CreateBlockchain(dataDir, "miner")
 	if err != nil {
 		t.Fatalf("CreateBlockchain() error = %v", err)
 	}
@@ -98,7 +102,7 @@ func TestChainExists(t *testing.T) {
 		t.Fatalf("ChainExists() = true, want false before initialization")
 	}
 
-	created, err := CreateBlockchain(dataDir, "genesis")
+	created, err := CreateBlockchain(dataDir, "miner")
 	if err != nil {
 		t.Fatalf("CreateBlockchain() error = %v", err)
 	}
@@ -113,5 +117,37 @@ func TestChainExists(t *testing.T) {
 
 	if !exists {
 		t.Fatalf("ChainExists() = false, want true after initialization")
+	}
+}
+
+func TestBalanceOf(t *testing.T) {
+	dataDir := filepath.Join(t.TempDir(), "data")
+
+	created, err := CreateBlockchain(dataDir, "miner")
+	if err != nil {
+		t.Fatalf("CreateBlockchain() error = %v", err)
+	}
+	t.Cleanup(func() {
+		_ = created.Close()
+	})
+
+	if _, _, err := created.SendTransaction("miner", "alice", 20); err != nil {
+		t.Fatalf("SendTransaction() error = %v", err)
+	}
+
+	minerBalance, err := created.BalanceOf("miner")
+	if err != nil {
+		t.Fatalf("BalanceOf(miner) error = %v", err)
+	}
+	if minerBalance != 30 {
+		t.Fatalf("BalanceOf(miner) = %d, want 30", minerBalance)
+	}
+
+	aliceBalance, err := created.BalanceOf("alice")
+	if err != nil {
+		t.Fatalf("BalanceOf(alice) error = %v", err)
+	}
+	if aliceBalance != 20 {
+		t.Fatalf("BalanceOf(alice) = %d, want 20", aliceBalance)
 	}
 }

@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"strconv"
 	"strings"
 	"time"
 
@@ -52,6 +53,10 @@ func (a App) Run(args []string) int {
 		return a.addBlock(args[1:])
 	case "printchain":
 		return a.printChain(args[1:])
+	case "send":
+		return a.send(args[1:])
+	case "getbalance":
+		return a.getBalance(args[1:])
 	default:
 		fmt.Fprintf(a.stderr, "unknown command: %s\n\n", args[0])
 		a.printHelp()
@@ -69,7 +74,7 @@ func isHelpArg(arg string) bool {
 }
 
 func (a App) printHelp() {
-	fmt.Fprintf(a.stdout, "%s initialization CLI\n\n", a.cfg.ProjectName)
+	fmt.Fprintf(a.stdout, "%s blockchain simulation CLI\n\n", a.cfg.ProjectName)
 	fmt.Fprintln(a.stdout, "Usage:")
 	fmt.Fprintf(a.stdout, "  %s [command]\n", a.cfg.ProjectName)
 	fmt.Fprintln(a.stdout)
@@ -78,9 +83,11 @@ func (a App) printHelp() {
 	fmt.Fprintln(a.stdout, "  version   Show project version information")
 	fmt.Fprintln(a.stdout, "  about     Show project version information")
 	fmt.Fprintln(a.stdout, "  doctor    Check initialization-stage readiness")
-	fmt.Fprintln(a.stdout, "  createblockchain [genesis-data]  Create a new blockchain")
-	fmt.Fprintln(a.stdout, "  addblock <data>                  Append a block to the current chain")
+	fmt.Fprintln(a.stdout, "  createblockchain [genesis-address]  Create a new blockchain")
+	fmt.Fprintln(a.stdout, "  addblock <label>                    Append a debug coinbase-style block")
 	fmt.Fprintln(a.stdout, "  printchain                       Print the blockchain from tip to genesis")
+	fmt.Fprintln(a.stdout, "  send <from> <to> <amount>        Add a minimal unsigned transaction block")
+	fmt.Fprintln(a.stdout, "  getbalance <address>             Show the naive balance for one address")
 }
 
 func (a App) printVersion() {
@@ -100,23 +107,23 @@ func (a App) printDoctor() {
 		}
 	}
 
-	fmt.Fprintf(a.stdout, "doctor: blockchain skeleton is ready\n")
+	fmt.Fprintf(a.stdout, "doctor: blockchain transaction demo is ready\n")
 	fmt.Fprintf(a.stdout, "project=%s\n", a.cfg.ProjectName)
 	fmt.Fprintf(a.stdout, "data_dir=%s\n", a.cfg.DataDir)
 	fmt.Fprintf(a.stdout, "default_port=%d\n", a.cfg.DefaultPort)
 	fmt.Fprintf(a.stdout, "log_level=%s\n", a.cfg.LogLevel)
 	fmt.Fprintf(a.stdout, "network_mode=%s\n", a.cfg.NetworkMode)
 	fmt.Fprintf(a.stdout, "chain_status=%s\n", chainStatus)
-	fmt.Fprintln(a.stdout, "next_step=implement transaction model")
+	fmt.Fprintln(a.stdout, "next_step=implement wallet system")
 }
 
 func (a App) createBlockchain(args []string) int {
-	genesisData := "Genesis Block"
+	genesisAddress := "miner"
 	if len(args) > 0 {
-		genesisData = strings.Join(args, " ")
+		genesisAddress = strings.Join(args, " ")
 	}
 
-	chain, err := blockchain.CreateBlockchain(a.cfg.DataDir, genesisData)
+	chain, err := blockchain.CreateBlockchain(a.cfg.DataDir, genesisAddress)
 	if err != nil {
 		if errors.Is(err, blockchain.ErrBlockchainAlreadyExists) {
 			fmt.Fprintln(a.stderr, "blockchain already exists")
@@ -128,7 +135,7 @@ func (a App) createBlockchain(args []string) int {
 	}
 	defer chain.Close()
 
-	fmt.Fprintf(a.stdout, "created blockchain with genesis block: %s\n", genesisData)
+	fmt.Fprintf(a.stdout, "created blockchain with genesis reward address: %s\n", genesisAddress)
 	return 0
 }
 
@@ -150,7 +157,8 @@ func (a App) addBlock(args []string) int {
 	}
 	defer chain.Close()
 
-	block, err := chain.AddBlock(strings.Join(args, " "))
+	noteTx := blockchain.NewCoinbaseTransaction("system", strings.Join(args, " "))
+	block, err := chain.AddBlock([]blockchain.Transaction{noteTx})
 	if err != nil {
 		fmt.Fprintf(a.stderr, "add block: %v\n", err)
 		return 1
@@ -187,11 +195,82 @@ func (a App) printChain(args []string) int {
 	for _, block := range blocks {
 		fmt.Fprintf(a.stdout, "Height: %d\n", block.Height)
 		fmt.Fprintf(a.stdout, "Timestamp: %s\n", time.Unix(block.Timestamp, 0).UTC().Format(time.RFC3339))
-		fmt.Fprintf(a.stdout, "Data: %s\n", string(block.Data))
 		fmt.Fprintf(a.stdout, "Hash: %s\n", block.HashHex())
 		fmt.Fprintf(a.stdout, "PrevHash: %s\n", block.PrevHashHex())
+		fmt.Fprintf(a.stdout, "Transactions: %d\n", len(block.Transactions))
+		for _, tx := range block.Transactions {
+			fmt.Fprintf(a.stdout, "  TxID: %s\n", tx.IDHex())
+			for _, input := range tx.Inputs {
+				fmt.Fprintf(a.stdout, "    Input: from=%s amount=%d\n", input.From, input.Amount)
+			}
+			for _, output := range tx.Outputs {
+				fmt.Fprintf(a.stdout, "    Output: to=%s amount=%d\n", output.To, output.Amount)
+			}
+		}
 		fmt.Fprintln(a.stdout)
 	}
 
+	return 0
+}
+
+func (a App) send(args []string) int {
+	if len(args) != 3 {
+		fmt.Fprintln(a.stderr, "send requires: <from> <to> <amount>")
+		return 1
+	}
+
+	amount, err := strconv.Atoi(args[2])
+	if err != nil {
+		fmt.Fprintf(a.stderr, "parse amount: %v\n", err)
+		return 1
+	}
+
+	chain, err := blockchain.OpenBlockchain(a.cfg.DataDir)
+	if err != nil {
+		if errors.Is(err, blockchain.ErrBlockchainNotInitialized) {
+			fmt.Fprintln(a.stderr, "blockchain not initialized; run createblockchain first")
+			return 1
+		}
+
+		fmt.Fprintf(a.stderr, "open blockchain: %v\n", err)
+		return 1
+	}
+	defer chain.Close()
+
+	block, tx, err := chain.SendTransaction(args[0], args[1], amount)
+	if err != nil {
+		fmt.Fprintf(a.stderr, "send transaction: %v\n", err)
+		return 1
+	}
+
+	fmt.Fprintf(a.stdout, "sent transaction txid=%s in block height=%d\n", tx.IDHex(), block.Height)
+	return 0
+}
+
+func (a App) getBalance(args []string) int {
+	if len(args) != 1 {
+		fmt.Fprintln(a.stderr, "getbalance requires: <address>")
+		return 1
+	}
+
+	chain, err := blockchain.OpenBlockchain(a.cfg.DataDir)
+	if err != nil {
+		if errors.Is(err, blockchain.ErrBlockchainNotInitialized) {
+			fmt.Fprintln(a.stderr, "blockchain not initialized; run createblockchain first")
+			return 1
+		}
+
+		fmt.Fprintf(a.stderr, "open blockchain: %v\n", err)
+		return 1
+	}
+	defer chain.Close()
+
+	balance, err := chain.BalanceOf(args[0])
+	if err != nil {
+		fmt.Fprintf(a.stderr, "get balance: %v\n", err)
+		return 1
+	}
+
+	fmt.Fprintf(a.stdout, "balance[%s]=%d\n", args[0], balance)
 	return 0
 }

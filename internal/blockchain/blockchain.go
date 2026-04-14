@@ -49,7 +49,7 @@ func ChainExists(dataDir string) (bool, error) {
 }
 
 // CreateBlockchain initializes a chain with a genesis block.
-func CreateBlockchain(dataDir string, genesisData string) (*Blockchain, error) {
+func CreateBlockchain(dataDir string, genesisAddress string) (*Blockchain, error) {
 	db, err := openDB(dataDir)
 	if err != nil {
 		return nil, err
@@ -65,7 +65,7 @@ func CreateBlockchain(dataDir string, genesisData string) (*Blockchain, error) {
 		return nil, ErrBlockchainAlreadyExists
 	}
 
-	genesis := NewGenesisBlock(genesisData)
+	genesis := NewGenesisBlock(NewCoinbaseTransaction(genesisAddress, "genesis block"))
 	encodedGenesis, err := genesis.Serialize()
 	if err != nil {
 		db.Close()
@@ -118,13 +118,13 @@ func OpenBlockchain(dataDir string) (*Blockchain, error) {
 }
 
 // AddBlock appends a new block to the tip of the chain.
-func (bc *Blockchain) AddBlock(data string) (*Block, error) {
+func (bc *Blockchain) AddBlock(transactions []Transaction) (*Block, error) {
 	lastBlock, err := bc.CurrentBlock()
 	if err != nil {
 		return nil, err
 	}
 
-	newBlock := NewBlock(data, bc.tip, lastBlock.Height+1)
+	newBlock := NewBlock(transactions, bc.tip, lastBlock.Height+1)
 	encodedBlock, err := newBlock.Serialize()
 	if err != nil {
 		return nil, err
@@ -146,6 +146,21 @@ func (bc *Blockchain) AddBlock(data string) (*Block, error) {
 	bc.tip = newBlock.Hash
 
 	return newBlock, nil
+}
+
+// SendTransaction creates a minimal transfer transaction and stores it in a new block.
+func (bc *Blockchain) SendTransaction(from, to string, amount int) (*Block, Transaction, error) {
+	tx, err := NewTransaction(from, to, amount)
+	if err != nil {
+		return nil, Transaction{}, err
+	}
+
+	block, err := bc.AddBlock([]Transaction{tx})
+	if err != nil {
+		return nil, Transaction{}, err
+	}
+
+	return block, tx, nil
 }
 
 // CurrentBlock returns the tip block.
@@ -184,6 +199,33 @@ func (bc *Blockchain) Blocks() ([]*Block, error) {
 	}
 
 	return blocks, nil
+}
+
+// BalanceOf computes a naive balance by summing minimal transaction flows.
+func (bc *Blockchain) BalanceOf(address string) (int, error) {
+	blocks, err := bc.Blocks()
+	if err != nil {
+		return 0, err
+	}
+
+	balance := 0
+	for _, block := range blocks {
+		for _, tx := range block.Transactions {
+			for _, input := range tx.Inputs {
+				if input.From == address {
+					balance -= input.Amount
+				}
+			}
+
+			for _, output := range tx.Outputs {
+				if output.To == address {
+					balance += output.Amount
+				}
+			}
+		}
+	}
+
+	return balance, nil
 }
 
 // Close releases the underlying database handle.
