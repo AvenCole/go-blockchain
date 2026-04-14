@@ -457,3 +457,38 @@ func TestSimDoubleSpendRejectsSecondTransaction(t *testing.T) {
 		t.Fatalf("simdouble output = %q, want rejected second tx", stdout.String())
 	}
 }
+
+func TestSimForkSwitchesToLongerBranch(t *testing.T) {
+	cfg := config.Default()
+	cfg.DataDir = filepath.Join(t.TempDir(), "data")
+
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	app := NewApp(cfg, &stdout, &stderr)
+
+	if code := app.Run([]string{"createwallet"}); code != 0 {
+		t.Fatalf("createwallet exit code = %d, stderr=%q", code, stderr.String())
+	}
+	miner := strings.TrimPrefix(strings.TrimSpace(stdout.String()), "created wallet address=")
+	stdout.Reset()
+	stderr.Reset()
+
+	if code := app.Run([]string{"createblockchain", miner}); code != 0 {
+		t.Fatalf("createblockchain exit code = %d, stderr=%q", code, stderr.String())
+	}
+	stdout.Reset()
+	stderr.Reset()
+
+	if code := app.Run([]string{"addblock", "main-1"}); code != 0 {
+		t.Fatalf("addblock main-1 exit code = %d, stderr=%q", code, stderr.String())
+	}
+	stdout.Reset()
+	stderr.Reset()
+
+	if code := app.Run([]string{"simfork", miner, "2"}); code != 0 {
+		t.Fatalf("simfork exit code = %d, stderr=%q", code, stderr.String())
+	}
+	if !strings.Contains(stdout.String(), "switched=true") {
+		t.Fatalf("simfork output = %q, want switched=true", stdout.String())
+	}
+}

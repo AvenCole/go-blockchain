@@ -81,6 +81,8 @@ func (a App) Run(args []string) int {
 		return a.startNode(args[1:])
 	case "simdouble":
 		return a.simulateDoubleSpend(args[1:])
+	case "simfork":
+		return a.simulateLongerFork(args[1:])
 	case "runperf":
 		return a.runPerformance(args[1:])
 	default:
@@ -122,6 +124,7 @@ func (a App) printHelp() {
 	fmt.Fprintln(a.stdout, "  mine <miner-address>             Mine all pending transactions into a block")
 	fmt.Fprintln(a.stdout, "  printmempool                     List pending transaction IDs")
 	fmt.Fprintln(a.stdout, "  simdouble <from> <to1> <to2> <amount> [fee]  Demonstrate double-spend rejection")
+	fmt.Fprintln(a.stdout, "  simfork <miner-address> [advance]  Demonstrate longest-chain fork switching")
 	fmt.Fprintln(a.stdout, "  runperf [lookups]                Run cache-vs-scan performance comparison")
 }
 
@@ -628,6 +631,84 @@ func (a App) simulateDoubleSpend(args []string) int {
 
 	fmt.Fprintf(a.stdout, "first_tx=%s queued\n", firstTx.IDHex())
 	fmt.Fprintf(a.stdout, "second_tx=%s rejected=%v\n", secondTx.IDHex(), secondErr != nil)
+	return 0
+}
+
+func (a App) simulateLongerFork(args []string) int {
+	if len(args) != 1 && len(args) != 2 {
+		fmt.Fprintln(a.stderr, "simfork requires: <miner-address> [advance]")
+		return 1
+	}
+	if !wallet.ValidateAddress(args[0]) {
+		fmt.Fprintln(a.stderr, "invalid miner address")
+		return 1
+	}
+
+	advance := 1
+	if len(args) == 2 {
+		n, err := strconv.Atoi(args[1])
+		if err != nil || n <= 0 {
+			fmt.Fprintf(a.stderr, "parse advance: %v\n", err)
+			return 1
+		}
+		advance = n
+	}
+
+	chain, err := blockchain.OpenBlockchain(a.cfg.DataDir)
+	if err != nil {
+		if errors.Is(err, blockchain.ErrBlockchainNotInitialized) {
+			fmt.Fprintln(a.stderr, "blockchain not initialized; run createblockchain first")
+			return 1
+		}
+		fmt.Fprintf(a.stderr, "open blockchain: %v\n", err)
+		return 1
+	}
+	defer chain.Close()
+
+	current, err := chain.CurrentBlock()
+	if err != nil {
+		fmt.Fprintf(a.stderr, "current block: %v\n", err)
+		return 1
+	}
+	blocks, err := chain.Blocks()
+	if err != nil {
+		fmt.Fprintf(a.stderr, "read chain: %v\n", err)
+		return 1
+	}
+	if len(blocks) == 0 {
+		fmt.Fprintln(a.stderr, "chain has no blocks")
+		return 1
+	}
+	genesis := blocks[len(blocks)-1]
+
+	targetHeight := current.Height + advance
+	prevHash := append([]byte(nil), genesis.Hash...)
+	var imported *blockchain.Block
+
+	for height := 1; height <= targetHeight; height++ {
+		forkBlock := blockchain.NewBlock(
+			[]blockchain.Transaction{blockchain.NewCoinbaseTransaction(args[0], fmt.Sprintf("fork height %d", height))},
+			prevHash,
+			height,
+		)
+		if err := chain.ImportBlock(forkBlock); err != nil {
+			fmt.Fprintf(a.stderr, "import fork block height=%d: %v\n", height, err)
+			return 1
+		}
+		prevHash = append([]byte(nil), forkBlock.Hash...)
+		imported = forkBlock
+	}
+
+	after, err := chain.CurrentBlock()
+	if err != nil {
+		fmt.Fprintf(a.stderr, "current block after fork: %v\n", err)
+		return 1
+	}
+
+	fmt.Fprintf(a.stdout, "before_height=%d before_tip=%s\n", current.Height, current.HashHex())
+	fmt.Fprintf(a.stdout, "fork_tip=%s fork_height=%d\n", imported.HashHex(), imported.Height)
+	fmt.Fprintf(a.stdout, "after_height=%d after_tip=%s\n", after.Height, after.HashHex())
+	fmt.Fprintf(a.stdout, "switched=%t\n", after.HashHex() == imported.HashHex())
 	return 0
 }
 

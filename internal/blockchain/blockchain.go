@@ -30,6 +30,8 @@ var (
 	ErrInvalidBlock = errors.New("invalid block")
 	// ErrDoubleSpend reports that one output is being spent twice.
 	ErrDoubleSpend = errors.New("double spend detected")
+	// ErrOrphanBlock reports that a block parent is unknown locally.
+	ErrOrphanBlock = errors.New("orphan block")
 )
 
 var lastHashKey = []byte("lh")
@@ -452,7 +454,21 @@ func (bc *Blockchain) ImportBlock(block *Block) error {
 	if block == nil {
 		return ErrInvalidBlock
 	}
-	if err := bc.ValidateBlock(block); err != nil {
+	if block.Height == 0 {
+		return ErrInvalidBlock
+	}
+
+	parent, err := bc.blockByHash(block.PrevBlockHash)
+	if err != nil {
+		if errors.Is(err, pebble.ErrNotFound) {
+			return ErrOrphanBlock
+		}
+		return err
+	}
+	if block.Height != parent.Height+1 {
+		return ErrInvalidBlock
+	}
+	if err := bc.validateBlockOnBranch(block, parent.Hash); err != nil {
 		return err
 	}
 
@@ -460,11 +476,14 @@ func (bc *Blockchain) ImportBlock(block *Block) error {
 	if err != nil {
 		return err
 	}
-	if block.Height <= current.Height {
+
+	if _, err := bc.blockByHash(block.Hash); err == nil {
+		if block.Height > current.Height {
+			return bc.switchTip(block.Hash)
+		}
 		return nil
-	}
-	if block.Height != current.Height+1 || !bytes.Equal(block.PrevBlockHash, bc.tip) {
-		return ErrInvalidBlock
+	} else if !errors.Is(err, pebble.ErrNotFound) {
+		return err
 	}
 
 	encodedBlock, err := block.Serialize()
@@ -477,19 +496,14 @@ func (bc *Blockchain) ImportBlock(block *Block) error {
 	if err := batch.Set(block.Hash, encodedBlock, nil); err != nil {
 		return err
 	}
-	if err := batch.Set(lastHashKey, block.Hash, nil); err != nil {
-		return err
-	}
-	if err := applyUTXOChanges(bc.db, batch, block); err != nil {
-		return err
-	}
-	if err := deleteMempoolTransactions(batch, block.Transactions); err != nil {
-		return err
-	}
 	if err := batch.Commit(pebble.Sync); err != nil {
 		return err
 	}
-	bc.tip = block.Hash
+
+	if block.Height > current.Height {
+		return bc.switchTip(block.Hash)
+	}
+
 	return nil
 }
 
@@ -847,6 +861,191 @@ func (bc *Blockchain) ensureNoMempoolConflicts(tx Transaction) error {
 	}
 
 	return nil
+}
+
+func (bc *Blockchain) switchTip(newTip []byte) error {
+	batch := bc.db.NewBatch()
+	defer batch.Close()
+
+	if err := batch.Set(lastHashKey, newTip, nil); err != nil {
+		return err
+	}
+	if err := batch.Commit(pebble.Sync); err != nil {
+		return err
+	}
+
+	bc.tip = append([]byte(nil), newTip...)
+	return bc.ReindexUTXO()
+}
+
+func (bc *Blockchain) blockByHash(hash []byte) (*Block, error) {
+	data, err := loadValue(bc.db, hash)
+	if err != nil {
+		return nil, err
+	}
+	return DeserializeBlock(data)
+}
+
+func (bc *Blockchain) blocksFromTipHash(tipHash []byte) ([]*Block, error) {
+	currentHash := append([]byte(nil), tipHash...)
+	var blocks []*Block
+
+	for len(currentHash) > 0 {
+		block, err := bc.blockByHash(currentHash)
+		if err != nil {
+			return nil, err
+		}
+		blocks = append(blocks, block)
+		currentHash = append([]byte(nil), block.PrevBlockHash...)
+	}
+
+	return blocks, nil
+}
+
+func (bc *Blockchain) validateBlockOnBranch(block *Block, parentHash []byte) error {
+	if block == nil {
+		return ErrInvalidBlock
+	}
+	if !block.VerifyMerkleRoot() || !block.VerifyProofOfWork() {
+		return ErrInvalidBlock
+	}
+	if len(block.Transactions) == 0 {
+		return ErrInvalidBlock
+	}
+
+	txIndex, utxoState, err := bc.branchState(parentHash)
+	if err != nil {
+		return err
+	}
+
+	coinbaseCount := 0
+	for idx, tx := range block.Transactions {
+		if tx.IsCoinbase() {
+			coinbaseCount++
+			if idx != 0 {
+				return ErrInvalidBlock
+			}
+			if err := applyTransactionToState(tx, txIndex, utxoState); err != nil {
+				return err
+			}
+			continue
+		}
+
+		if err := validateTransactionOnState(tx, txIndex, utxoState); err != nil {
+			return err
+		}
+		if err := applyTransactionToState(tx, txIndex, utxoState); err != nil {
+			return err
+		}
+	}
+	if coinbaseCount != 1 {
+		return ErrInvalidBlock
+	}
+
+	return nil
+}
+
+func (bc *Blockchain) branchState(parentHash []byte) (map[string]Transaction, map[string][]CachedUTXO, error) {
+	txIndex := make(map[string]Transaction)
+	utxoState := make(map[string][]CachedUTXO)
+
+	if len(parentHash) == 0 {
+		return txIndex, utxoState, nil
+	}
+
+	blocks, err := bc.blocksFromTipHash(parentHash)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	for i := len(blocks) - 1; i >= 0; i-- {
+		block := blocks[i]
+		for _, tx := range block.Transactions {
+			if err := applyTransactionToState(tx, txIndex, utxoState); err != nil {
+				return nil, nil, err
+			}
+		}
+	}
+
+	return txIndex, utxoState, nil
+}
+
+func validateTransactionOnState(tx Transaction, prevTXs map[string]Transaction, utxoState map[string][]CachedUTXO) error {
+	if tx.IsCoinbase() {
+		return nil
+	}
+	if !tx.Verify(prevTXs) {
+		return ErrInvalidTransaction
+	}
+
+	seen := make(map[string]struct{})
+	for _, input := range tx.Inputs {
+		prevTx, ok := prevTXs[input.TxIDHex()]
+		if !ok {
+			return ErrTransactionNotFound
+		}
+		if input.Out < 0 || input.Out >= len(prevTx.Outputs) {
+			return ErrInvalidTransaction
+		}
+
+		key := fmt.Sprintf("%s:%d", input.TxIDHex(), input.Out)
+		if _, exists := seen[key]; exists {
+			return ErrDoubleSpend
+		}
+		seen[key] = struct{}{}
+
+		if !outputAvailableInState(utxoState, input.TxIDHex(), input.Out) {
+			return ErrDoubleSpend
+		}
+	}
+
+	return nil
+}
+
+func applyTransactionToState(tx Transaction, txIndex map[string]Transaction, utxoState map[string][]CachedUTXO) error {
+	if !tx.IsCoinbase() {
+		for _, input := range tx.Inputs {
+			txIDHex := input.TxIDHex()
+			cached := utxoState[txIDHex]
+			var remaining []CachedUTXO
+			found := false
+			for _, item := range cached {
+				if item.Index == input.Out {
+					found = true
+					continue
+				}
+				remaining = append(remaining, item)
+			}
+			if !found {
+				return ErrInvalidTransaction
+			}
+			if len(remaining) == 0 {
+				delete(utxoState, txIDHex)
+			} else {
+				utxoState[txIDHex] = remaining
+			}
+		}
+	}
+
+	outputs := make([]CachedUTXO, 0, len(tx.Outputs))
+	for idx, output := range tx.Outputs {
+		outputs = append(outputs, CachedUTXO{
+			Index:  idx,
+			Output: output,
+		})
+	}
+	utxoState[tx.IDHex()] = outputs
+	txIndex[tx.IDHex()] = tx.Clone()
+	return nil
+}
+
+func outputAvailableInState(utxoState map[string][]CachedUTXO, txIDHex string, out int) bool {
+	for _, item := range utxoState[txIDHex] {
+		if item.Index == out {
+			return true
+		}
+	}
+	return false
 }
 
 func applyUTXOChanges(db *pebble.DB, batch *pebble.Batch, block *Block) error {

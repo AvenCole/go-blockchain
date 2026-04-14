@@ -1,6 +1,7 @@
 package blockchain
 
 import (
+	"bytes"
 	"errors"
 	"path/filepath"
 	"testing"
@@ -426,6 +427,96 @@ func TestImportInvalidGenesisBlockToEmptyDirFails(t *testing.T) {
 	}
 	if height != -1 {
 		t.Fatalf("BestHeight() = %d, want -1 for no imported chain", height)
+	}
+}
+
+func TestImportBlockSwitchesToLongerFork(t *testing.T) {
+	dataDir := filepath.Join(t.TempDir(), "data")
+	miner := mustNewWallet(t)
+
+	created, err := CreateBlockchain(dataDir, miner.Address())
+	if err != nil {
+		t.Fatalf("CreateBlockchain() error = %v", err)
+	}
+	t.Cleanup(func() { _ = created.Close() })
+
+	if _, err := created.AddBlock([]Transaction{NewCoinbaseTransaction(miner.Address(), "main-1")}); err != nil {
+		t.Fatalf("AddBlock(main-1) error = %v", err)
+	}
+	if _, err := created.AddBlock([]Transaction{NewCoinbaseTransaction(miner.Address(), "main-2")}); err != nil {
+		t.Fatalf("AddBlock(main-2) error = %v", err)
+	}
+
+	mainTip, err := created.CurrentBlock()
+	if err != nil {
+		t.Fatalf("CurrentBlock() error = %v", err)
+	}
+	if mainTip.Height != 2 {
+		t.Fatalf("main tip height = %d, want 2", mainTip.Height)
+	}
+
+	blocks, err := created.Blocks()
+	if err != nil {
+		t.Fatalf("Blocks() error = %v", err)
+	}
+	genesis := blocks[len(blocks)-1]
+
+	fork1 := NewBlock([]Transaction{NewCoinbaseTransaction(miner.Address(), "fork-1")}, genesis.Hash, 1)
+	if err := created.ImportBlock(fork1); err != nil {
+		t.Fatalf("ImportBlock(fork1) error = %v", err)
+	}
+	current, _ := created.CurrentBlock()
+	if !bytes.Equal(current.Hash, mainTip.Hash) {
+		t.Fatalf("current tip switched on shorter fork")
+	}
+
+	fork2 := NewBlock([]Transaction{NewCoinbaseTransaction(miner.Address(), "fork-2")}, fork1.Hash, 2)
+	if err := created.ImportBlock(fork2); err != nil {
+		t.Fatalf("ImportBlock(fork2) error = %v", err)
+	}
+	current, _ = created.CurrentBlock()
+	if !bytes.Equal(current.Hash, mainTip.Hash) {
+		t.Fatalf("current tip switched on equal-height fork")
+	}
+
+	fork3 := NewBlock([]Transaction{NewCoinbaseTransaction(miner.Address(), "fork-3")}, fork2.Hash, 3)
+	if err := created.ImportBlock(fork3); err != nil {
+		t.Fatalf("ImportBlock(fork3) error = %v", err)
+	}
+
+	current, err = created.CurrentBlock()
+	if err != nil {
+		t.Fatalf("CurrentBlock() after fork error = %v", err)
+	}
+	if !bytes.Equal(current.Hash, fork3.Hash) {
+		t.Fatalf("current tip hash = %x, want fork3 %x", current.Hash, fork3.Hash)
+	}
+
+	allBlocks, err := created.Blocks()
+	if err != nil {
+		t.Fatalf("Blocks() after fork error = %v", err)
+	}
+	if len(allBlocks) != 4 {
+		t.Fatalf("len(Blocks()) = %d, want 4 for fork branch", len(allBlocks))
+	}
+	if allBlocks[0].Height != 3 || allBlocks[1].Height != 2 || allBlocks[2].Height != 1 || allBlocks[3].Height != 0 {
+		t.Fatalf("unexpected branch heights after switch")
+	}
+}
+
+func TestImportBlockRejectsUnknownParent(t *testing.T) {
+	dataDir := filepath.Join(t.TempDir(), "data")
+	miner := mustNewWallet(t)
+
+	created, err := CreateBlockchain(dataDir, miner.Address())
+	if err != nil {
+		t.Fatalf("CreateBlockchain() error = %v", err)
+	}
+	t.Cleanup(func() { _ = created.Close() })
+
+	orphan := NewBlock([]Transaction{NewCoinbaseTransaction(miner.Address(), "orphan")}, bytes.Repeat([]byte{0x42}, 32), 1)
+	if err := created.ImportBlock(orphan); !errors.Is(err, ErrOrphanBlock) {
+		t.Fatalf("ImportBlock(orphan) error = %v, want ErrOrphanBlock", err)
 	}
 }
 

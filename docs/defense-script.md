@@ -114,6 +114,20 @@ go run ./cmd/go-blockchain startnode 127.0.0.1:3011 127.0.0.1:3010
 2. 区块和交易能够传播
 3. 新节点能同步已有链
 
+### 5.5 最长链切换演示
+
+命令：
+
+```bash
+go run ./cmd/go-blockchain simfork <miner-address> 2
+```
+
+讲解重点：
+
+1. 系统允许保存侧链块
+2. 当侧链长度超过当前主链后，tip 会切换
+3. 切换后会重建 UTXO，保证账本状态一致
+
 ### 6. GUI 演示
 
 直接打开桌面程序：

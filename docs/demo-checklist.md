@@ -27,6 +27,7 @@
 - [ ] `getbalance`
 - [ ] `printchain`
 - [ ] `simdouble`
+- [ ] `simfork`
 - [ ] `runperf`
 
 ## 四、GUI 演示检查
