@@ -14,11 +14,12 @@ function StatCard({ title, value, secondary }: StatCardProps) {
       sx={{
         height: '100%',
         backgroundImage: 'none',
+        borderRadius: 0.5,
       }}
     >
       <CardContent>
         <Stack spacing={1.25}>
-          <Chip label={title} size="small" variant="outlined" sx={{ alignSelf: 'flex-start', fontWeight: 600 }} />
+          <Chip label={title} size="small" variant="outlined" sx={{ alignSelf: 'flex-start', fontWeight: 600, borderRadius: 0.5 }} />
           <Typography variant="h5" sx={{ fontWeight: 700 }}>{value}</Typography>
           {secondary ? (
             <Typography variant="body2" color="text.secondary">

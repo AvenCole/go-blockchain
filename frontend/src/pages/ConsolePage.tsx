@@ -41,7 +41,7 @@ function ConsolePage({ command, setCommand, history, onExecute }: ConsolePagePro
           color: '#d6f5d6',
           fontFamily: 'Consolas, monospace',
           overflow: 'auto',
-          borderRadius: 1,
+          borderRadius: 0.5,
         }}
       >
         <Stack spacing={2}>

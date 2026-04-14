@@ -29,7 +29,7 @@ function BlocksPage({ blocks }: BlocksPageProps) {
             <Typography variant="body2">Time: {block.timestamp}</Typography>
             <Stack spacing={1} sx={{ mt: 2 }}>
               {block.transactions.map((tx) => (
-                <Accordion key={tx.id} disableGutters elevation={0}>
+                <Accordion key={tx.id} disableGutters elevation={0} sx={{ borderRadius: 0.5 }}>
                   <AccordionSummary expandIcon={<ExpandMoreIcon />}>
                     <Stack direction="row" spacing={1} sx={{ alignItems: 'center', flexWrap: 'wrap' }}>
                       <Typography variant="subtitle2">TxID: {shortHash(tx.id, 14, 10)}</Typography>
