@@ -115,6 +115,89 @@ func TestTransactionAndBlockBroadcast(t *testing.T) {
 	}
 }
 
+func TestNodeAnnouncesTipAfterMiningToOtherPeers(t *testing.T) {
+	dirA := filepath.Join(t.TempDir(), "nodeA")
+	dirB := filepath.Join(t.TempDir(), "nodeB")
+	miner := mustWallet(t)
+	alice := mustWallet(t)
+
+	chainA, err := blockchain.CreateBlockchain(dirA, miner.Address())
+	if err != nil {
+		t.Fatalf("CreateBlockchain(nodeA) error = %v", err)
+	}
+	_ = chainA.Close()
+
+	addrA := freeAddress(t)
+	addrB := freeAddress(t)
+
+	nodeA := NewNode(addrA, dirA, miner.Address())
+	nodeB := NewNode(addrB, dirB, "")
+
+	ctxA, cancelA := context.WithCancel(context.Background())
+	ctxB, cancelB := context.WithCancel(context.Background())
+	doneA := make(chan struct{})
+	doneB := make(chan struct{})
+	t.Cleanup(func() {
+		cancelA()
+		cancelB()
+		waitForStop(t, doneA)
+		waitForStop(t, doneB)
+	})
+
+	go func() {
+		defer close(doneA)
+		_ = nodeA.Listen(ctxA)
+	}()
+	go func() {
+		defer close(doneB)
+		_ = nodeB.Listen(ctxB)
+	}()
+	waitUntilListening(t, nodeA.Address)
+	waitUntilListening(t, nodeB.Address)
+
+	if err := nodeB.Connect(nodeA.Address); err != nil {
+		t.Fatalf("nodeB.Connect(nodeA) error = %v", err)
+	}
+	waitUntil(t, func() bool {
+		return len(nodeA.KnownPeers()) >= 2 && len(nodeB.KnownPeers()) >= 2
+	})
+	if err := nodeA.sendBlocks(nodeB.Address, -1); err != nil {
+		t.Fatalf("nodeA.sendBlocks(nodeB) error = %v", err)
+	}
+	waitUntil(t, func() bool {
+		height, _ := blockchain.BestHeight(dirB)
+		return height == 0
+	})
+
+	if _, err := nodeA.SubmitTransaction(miner, alice.Address(), 20, 1); err != nil {
+		t.Fatalf("nodeA.SubmitTransaction() error = %v", err)
+	}
+	if _, err := nodeA.MinePending(); err != nil {
+		t.Fatalf("nodeA.MinePending() error = %v", err)
+	}
+
+	waitUntil(t, func() bool {
+		for _, event := range nodeA.RecentEvents() {
+			if event.Kind == "tip_announce" {
+				return true
+			}
+		}
+		return false
+	})
+	waitUntil(t, func() bool {
+		for _, event := range nodeB.RecentEvents() {
+			if event.Kind == "version" && stringsContains(event.Detail, "height=1") {
+				return true
+			}
+		}
+		return false
+	})
+	waitUntil(t, func() bool {
+		height, err := blockchain.BestHeight(dirB)
+		return err == nil && height == 1
+	})
+}
+
 func TestNodeBuffersOrphanBlockUntilParentArrives(t *testing.T) {
 	dirA := filepath.Join(t.TempDir(), "nodeA")
 	dirB := filepath.Join(t.TempDir(), "nodeB")
@@ -230,6 +313,15 @@ func waitUntilListening(t *testing.T, addr string) {
 		_ = conn.Close()
 		return true
 	})
+}
+
+func waitForStop(t *testing.T, done <-chan struct{}) {
+	t.Helper()
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		t.Fatalf("listener did not stop before timeout")
+	}
 }
 
 func mustWallet(t *testing.T) *wallet.Wallet {

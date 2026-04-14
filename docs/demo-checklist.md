@@ -52,6 +52,7 @@
 - [ ] 网络页能显示 orphan 数量
 - [ ] 最近链事件中能看到 genesis / main_block / fork_block / reorg
 - [ ] 网络页能显示节点最近网络事件
+- [ ] 网络事件中能看到 tip_announce
 - [ ] CLI 可演示 P2PK 脚本模板
 - [ ] CLI 可演示多重签名流程
 - [ ] GUI 交易页可切换脚本模板

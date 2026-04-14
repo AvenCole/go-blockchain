@@ -190,6 +190,7 @@ func (n *Node) MinePending() (*blockchain.Block, error) {
 		From:  n.Address,
 		Block: *block,
 	}, n.Address)
+	_ = n.announceTipHeightExcept(block.Height, "")
 
 	return block, nil
 }
@@ -406,6 +407,7 @@ func (n *Node) addPeer(peer string) {
 }
 
 func (n *Node) importOrBufferBlock(from string, block blockchain.Block) error {
+	beforeHeight, _ := blockchain.BestHeight(n.DataDir)
 	blockCopy := block
 	if err := blockchain.ImportBlockToDir(n.DataDir, &blockCopy); err != nil {
 		switch {
@@ -426,6 +428,10 @@ func (n *Node) importOrBufferBlock(from string, block blockchain.Block) error {
 
 	n.recordEvent("block_import", fmt.Sprintf("imported block height=%d hash=%s", block.Height, block.HashHex()))
 	n.processOrphanDescendants(from, block.Hash)
+	afterHeight, _ := blockchain.BestHeight(n.DataDir)
+	if afterHeight > beforeHeight {
+		_ = n.announceTipHeightExcept(afterHeight, from)
+	}
 	return nil
 }
 
@@ -527,6 +533,25 @@ func (n *Node) recordEvent(kind, detail string) {
 	if len(n.events) > maxNodeEvents {
 		n.events = n.events[:maxNodeEvents]
 	}
+}
+
+func (n *Node) announceTipHeightExcept(height int, except string) error {
+	announced := 0
+	for _, peer := range n.KnownPeers() {
+		if peer == n.Address || peer == except {
+			continue
+		}
+		if err := n.send(peer, "version", versionMessage{
+			From:       n.Address,
+			BestHeight: height,
+		}); err == nil {
+			announced++
+		}
+	}
+	if announced > 0 {
+		n.recordEvent("tip_announce", fmt.Sprintf("announced height=%d to %d peer(s)", height, announced))
+	}
+	return nil
 }
 
 func encodePayload(v any) ([]byte, error) {
