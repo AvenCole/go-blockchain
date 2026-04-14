@@ -41,7 +41,7 @@ func (s *Service) QueueTransaction(from, to string, amount int, fee int) (string
 
 	bc, err := s.openBlockchain()
 	if err != nil {
-		return "", err
+		return "", friendlyGUIError(err)
 	}
 
 	wallets, err := s.loadWallets()
@@ -55,7 +55,7 @@ func (s *Service) QueueTransaction(from, to string, amount int, fee int) (string
 
 	tx, err := bc.SendTransaction(fromWallet, to, amount, fee)
 	if err != nil {
-		return "", err
+		return "", friendlyGUIError(err)
 	}
 
 	return tx.IDHex(), nil
@@ -71,12 +71,12 @@ func (s *Service) MinePending(minerAddress string) (string, error) {
 
 	bc, err := s.openBlockchain()
 	if err != nil {
-		return "", err
+		return "", friendlyGUIError(err)
 	}
 
 	block, _, err := bc.MineMempool(minerAddress)
 	if err != nil {
-		return "", err
+		return "", friendlyGUIError(err)
 	}
 
 	return block.HashHex(), nil
