@@ -174,3 +174,53 @@ func TestDashboardIncludesLastReorgStatus(t *testing.T) {
 		t.Fatalf("dashboard.RecentEvents[0].Kind = %q, want reorg", dashboard.RecentEvents[0].Kind)
 	}
 }
+
+func TestQueueP2PKAndMultiSigTransactions(t *testing.T) {
+	t.Setenv(guiDataDirEnv, t.TempDir())
+
+	service := NewService()
+	minerAddr, err := service.CreateWallet()
+	if err != nil {
+		t.Fatalf("CreateWallet(miner) error = %v", err)
+	}
+	aliceAddr, err := service.CreateWallet()
+	if err != nil {
+		t.Fatalf("CreateWallet(alice) error = %v", err)
+	}
+	bobAddr, err := service.CreateWallet()
+	if err != nil {
+		t.Fatalf("CreateWallet(bob) error = %v", err)
+	}
+
+	chain, err := blockchain.CreateBlockchain(service.cfg.DataDir, minerAddr)
+	if err != nil {
+		t.Fatalf("CreateBlockchain() error = %v", err)
+	}
+	if err := chain.Close(); err != nil {
+		t.Fatalf("Close() error = %v", err)
+	}
+
+	p2pkTxID, err := service.QueueP2PKTransaction(minerAddr, aliceAddr, 20, 1)
+	if err != nil {
+		t.Fatalf("QueueP2PKTransaction() error = %v", err)
+	}
+	if p2pkTxID == "" {
+		t.Fatalf("QueueP2PKTransaction() returned empty txid")
+	}
+
+	multiTxID, err := service.QueueMultiSigTransaction(minerAddr, aliceAddr+","+bobAddr, 2, 10, 1)
+	if err != nil {
+		t.Fatalf("QueueMultiSigTransaction() error = %v", err)
+	}
+	if multiTxID == "" {
+		t.Fatalf("QueueMultiSigTransaction() returned empty txid")
+	}
+
+	pending, err := service.PendingTransactions()
+	if err != nil {
+		t.Fatalf("PendingTransactions() error = %v", err)
+	}
+	if len(pending) != 2 {
+		t.Fatalf("len(pending) = %d, want 2", len(pending))
+	}
+}

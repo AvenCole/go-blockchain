@@ -8,6 +8,8 @@ import {
   Nodes,
   PendingTransactions,
   QueueTransaction,
+  QueueP2PKTransaction,
+  QueueMultiSigTransaction,
   StartNode,
   StopNode,
   Wallets,
@@ -21,6 +23,15 @@ export const fetchPendingTransactions = (): Promise<string[]> => PendingTransact
 export const createWallet = (): Promise<string> => CreateWallet()
 export const queueTransaction = (from: string, to: string, amount: number, fee: number): Promise<string> =>
   QueueTransaction(from, to, amount, fee)
+export const queueP2PKTransaction = (from: string, to: string, amount: number, fee: number): Promise<string> =>
+  QueueP2PKTransaction(from, to, amount, fee)
+export const queueMultiSigTransaction = (
+  from: string,
+  recipientsCSV: string,
+  required: number,
+  amount: number,
+  fee: number,
+): Promise<string> => QueueMultiSigTransaction(from, recipientsCSV, required, amount, fee)
 export const minePending = (minerAddress: string): Promise<string> => MinePending(minerAddress)
 export const executeCLI = (commandLine: string): Promise<CommandResult> => ExecuteCLI(commandLine)
 export const fetchNodes = (): Promise<NodeStatus[]> => Nodes()

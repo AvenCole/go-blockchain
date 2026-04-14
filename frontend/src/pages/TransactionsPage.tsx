@@ -1,8 +1,11 @@
-import { Box, Button, Card, CardContent, Divider, List, ListItem, ListItemText, Stack, TextField, Typography } from '@mui/material'
+import { Box, Button, Card, CardContent, Divider, List, ListItem, ListItemText, MenuItem, Stack, TextField, Typography } from '@mui/material'
 
 type TxForm = {
+  template: 'p2pkh' | 'p2pk' | 'multisig'
   from: string
   to: string
+  recipients: string
+  required: string
   amount: string
   fee: string
 }
@@ -33,11 +36,37 @@ function TransactionsPage({
           <CardContent sx={{ p: 2 }}>
             <Typography variant="h6">发送交易</Typography>
             <Typography color="text.secondary" sx={{ mt: 1 }}>
-              这里的发送动作会把交易排队进入 mempool，而不是立刻成块。
+              支持 P2PKH、P2PK 和教学型多重签名输出，发送动作会先进入 mempool。
             </Typography>
             <Stack spacing={2} sx={{ mt: 2 }}>
+              <TextField
+                select
+                label="Script Template"
+                value={txForm.template}
+                onChange={(e) => setTxForm((p) => ({ ...p, template: e.target.value as TxForm['template'] }))}
+              >
+                <MenuItem value="p2pkh">P2PKH</MenuItem>
+                <MenuItem value="p2pk">P2PK</MenuItem>
+                <MenuItem value="multisig">MultiSig</MenuItem>
+              </TextField>
               <TextField label="From" value={txForm.from} onChange={(e) => setTxForm((p) => ({ ...p, from: e.target.value }))} />
-              <TextField label="To" value={txForm.to} onChange={(e) => setTxForm((p) => ({ ...p, to: e.target.value }))} />
+              {txForm.template === 'multisig' ? (
+                <>
+                  <TextField
+                    label="Recipients CSV"
+                    value={txForm.recipients}
+                    onChange={(e) => setTxForm((p) => ({ ...p, recipients: e.target.value }))}
+                    helperText="例如: addr1,addr2"
+                  />
+                  <TextField
+                    label="Required Signers"
+                    value={txForm.required}
+                    onChange={(e) => setTxForm((p) => ({ ...p, required: e.target.value }))}
+                  />
+                </>
+              ) : (
+                <TextField label="To" value={txForm.to} onChange={(e) => setTxForm((p) => ({ ...p, to: e.target.value }))} />
+              )}
               <TextField label="Amount" value={txForm.amount} onChange={(e) => setTxForm((p) => ({ ...p, amount: e.target.value }))} />
               <TextField label="Fee" value={txForm.fee} onChange={(e) => setTxForm((p) => ({ ...p, fee: e.target.value }))} />
               <Button variant="contained" onClick={onQueueTransaction}>加入交易池</Button>

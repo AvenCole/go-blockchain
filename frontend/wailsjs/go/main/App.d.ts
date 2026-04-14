@@ -18,6 +18,10 @@ export function Nodes():Promise<Array<gui.NodeStatus>>;
 
 export function PendingTransactions():Promise<Array<string>>;
 
+export function QueueMultiSigTransaction(arg1:string,arg2:string,arg3:number,arg4:number,arg5:number):Promise<string>;
+
+export function QueueP2PKTransaction(arg1:string,arg2:string,arg3:number,arg4:number):Promise<string>;
+
 export function QueueTransaction(arg1:string,arg2:string,arg3:number,arg4:number):Promise<string>;
 
 export function StartNode(arg1:string,arg2:string,arg3:string):Promise<string>;

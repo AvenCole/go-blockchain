@@ -46,6 +46,8 @@ import {
   fetchPendingTransactions,
   fetchWallets,
   minePending,
+  queueMultiSigTransaction,
+  queueP2PKTransaction,
   queueTransaction,
   startNode,
   stopNode,
@@ -78,7 +80,15 @@ function App() {
   const [nodes, setNodes] = useState<NodeStatus[]>([])
   const [message, setMessage] = useState('')
   const [error, setError] = useState('')
-  const [txForm, setTxForm] = useState({ from: '', to: '', amount: '20', fee: '2' })
+  const [txForm, setTxForm] = useState({
+    template: 'p2pkh' as 'p2pkh' | 'p2pk' | 'multisig',
+    from: '',
+    to: '',
+    recipients: '',
+    required: '2',
+    amount: '20',
+    fee: '2',
+  })
   const [minerAddress, setMinerAddress] = useState('')
   const [command, setCommand] = useState('')
   const [history, setHistory] = useState<CommandResult[]>([])
@@ -110,6 +120,9 @@ function App() {
       }
       if (!txForm.to && walletList.length > 1) {
         setTxForm((prev) => ({ ...prev, to: walletList[1].address }))
+      }
+      if (!txForm.recipients && walletList.length > 1) {
+        setTxForm((prev) => ({ ...prev, recipients: `${walletList[0].address},${walletList[1].address}` }))
       }
       if (!nodeForm.miner && walletList.length > 0) {
         setNodeForm((prev) => ({ ...prev, miner: walletList[0].address }))
@@ -217,7 +230,20 @@ function App() {
   const handleQueueTransaction = async () => {
     try {
       setError('')
-      const txid = await queueTransaction(txForm.from, txForm.to, Number(txForm.amount), Number(txForm.fee || '0'))
+      let txid = ''
+      if (txForm.template === 'p2pk') {
+        txid = await queueP2PKTransaction(txForm.from, txForm.to, Number(txForm.amount), Number(txForm.fee || '0'))
+      } else if (txForm.template === 'multisig') {
+        txid = await queueMultiSigTransaction(
+          txForm.from,
+          txForm.recipients,
+          Number(txForm.required || '0'),
+          Number(txForm.amount),
+          Number(txForm.fee || '0'),
+        )
+      } else {
+        txid = await queueTransaction(txForm.from, txForm.to, Number(txForm.amount), Number(txForm.fee || '0'))
+      }
       setMessage(`交易已进入 Mempool：${txid}`)
       await refresh()
     } catch (err) {

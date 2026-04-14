@@ -217,6 +217,14 @@ go run ./cmd/go-blockchain spendmultisig <addr1,addr2> <source-txid> 0 <to> 10 1
 2. 还能演示多个签名者共同解锁同一输出
 3. 这说明脚本系统不只是“换个壳”，而是真能表达不同花费条件
 
+### 6.5 GUI 脚本交易模板切换
+
+建议在 GUI 交易页讲解：
+
+1. 可以切换 P2PKH / P2PK / MultiSig
+2. 前端只是选择模板和参数
+3. 真实脚本交易仍然由 Go 后端构造
+
 ### 5.11 节点最近网络事件
 
 讲解重点：

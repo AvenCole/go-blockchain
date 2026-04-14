@@ -34,6 +34,14 @@ export function PendingTransactions() {
   return window['go']['main']['App']['PendingTransactions']();
 }
 
+export function QueueMultiSigTransaction(arg1, arg2, arg3, arg4, arg5) {
+  return window['go']['main']['App']['QueueMultiSigTransaction'](arg1, arg2, arg3, arg4, arg5);
+}
+
+export function QueueP2PKTransaction(arg1, arg2, arg3, arg4) {
+  return window['go']['main']['App']['QueueP2PKTransaction'](arg1, arg2, arg3, arg4);
+}
+
 export function QueueTransaction(arg1, arg2, arg3, arg4) {
   return window['go']['main']['App']['QueueTransaction'](arg1, arg2, arg3, arg4);
 }

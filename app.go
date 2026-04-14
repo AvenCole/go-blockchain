@@ -44,6 +44,14 @@ func (a *App) QueueTransaction(from, to string, amount int, fee int) (string, er
 	return a.service.QueueTransaction(from, to, amount, fee)
 }
 
+func (a *App) QueueP2PKTransaction(from, to string, amount int, fee int) (string, error) {
+	return a.service.QueueP2PKTransaction(from, to, amount, fee)
+}
+
+func (a *App) QueueMultiSigTransaction(from, recipientsCSV string, required int, amount int, fee int) (string, error) {
+	return a.service.QueueMultiSigTransaction(from, recipientsCSV, required, amount, fee)
+}
+
 func (a *App) MinePending(minerAddress string) (string, error) {
 	return a.service.MinePending(minerAddress)
 }
