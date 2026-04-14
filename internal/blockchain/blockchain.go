@@ -26,6 +26,8 @@ var (
 	ErrTransactionNotFound = errors.New("transaction not found")
 	// ErrInvalidTransaction reports that signature verification failed.
 	ErrInvalidTransaction = errors.New("invalid transaction")
+	// ErrInvalidBlock reports one invalid received block.
+	ErrInvalidBlock = errors.New("invalid block")
 )
 
 var lastHashKey = []byte("lh")
@@ -263,6 +265,15 @@ func (bc *Blockchain) CurrentBlock() (*Block, error) {
 	return DeserializeBlock(data)
 }
 
+// Height returns the current chain height.
+func (bc *Blockchain) Height() (int, error) {
+	current, err := bc.CurrentBlock()
+	if err != nil {
+		return -1, err
+	}
+	return current.Height, nil
+}
+
 // Iterator returns a chain iterator starting at the tip.
 func (bc *Blockchain) Iterator() *Iterator {
 	return &Iterator{
@@ -289,6 +300,23 @@ func (bc *Blockchain) Blocks() ([]*Block, error) {
 	}
 
 	return blocks, nil
+}
+
+// BlocksFromHeight returns blocks with height greater than fromHeight in ascending order.
+func (bc *Blockchain) BlocksFromHeight(fromHeight int) ([]*Block, error) {
+	blocks, err := bc.Blocks()
+	if err != nil {
+		return nil, err
+	}
+
+	var filtered []*Block
+	for i := len(blocks) - 1; i >= 0; i-- {
+		if blocks[i].Height > fromHeight {
+			filtered = append(filtered, blocks[i])
+		}
+	}
+
+	return filtered, nil
 }
 
 // FindTransaction returns one transaction by its ID.
@@ -339,6 +367,57 @@ func (bc *Blockchain) VerifyTransaction(tx Transaction) bool {
 	}
 
 	return tx.Verify(prevTXs)
+}
+
+// ImportBlock stores an externally received block if it cleanly extends the tip.
+func (bc *Blockchain) ImportBlock(block *Block) error {
+	if block == nil {
+		return ErrInvalidBlock
+	}
+	if !block.VerifyMerkleRoot() || !block.VerifyProofOfWork() {
+		return ErrInvalidBlock
+	}
+	for _, tx := range block.Transactions {
+		if !bc.VerifyTransaction(tx) {
+			return ErrInvalidTransaction
+		}
+	}
+
+	current, err := bc.CurrentBlock()
+	if err != nil {
+		return err
+	}
+	if block.Height <= current.Height {
+		return nil
+	}
+	if block.Height != current.Height+1 || !bytes.Equal(block.PrevBlockHash, bc.tip) {
+		return ErrInvalidBlock
+	}
+
+	encodedBlock, err := block.Serialize()
+	if err != nil {
+		return err
+	}
+
+	batch := bc.db.NewBatch()
+	defer batch.Close()
+	if err := batch.Set(block.Hash, encodedBlock, nil); err != nil {
+		return err
+	}
+	if err := batch.Set(lastHashKey, block.Hash, nil); err != nil {
+		return err
+	}
+	if err := applyUTXOChanges(bc.db, batch, block); err != nil {
+		return err
+	}
+	if err := deleteMempoolTransactions(batch, block.Transactions); err != nil {
+		return err
+	}
+	if err := batch.Commit(pebble.Sync); err != nil {
+		return err
+	}
+	bc.tip = block.Hash
+	return nil
 }
 
 // AddToMempool stores one signed transaction in the mempool cache.
@@ -626,6 +705,18 @@ func mempoolKey(txID []byte) []byte {
 	return append(append([]byte(nil), mempoolPrefix...), txID...)
 }
 
+func deleteMempoolTransactions(batch *pebble.Batch, transactions []Transaction) error {
+	for _, tx := range transactions {
+		if tx.IsCoinbase() {
+			continue
+		}
+		if err := batch.Delete(mempoolKey(tx.ID), nil); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func prefixUpperBound(prefix []byte) []byte {
 	upper := append([]byte(nil), prefix...)
 	upper[len(upper)-1]++
@@ -724,6 +815,69 @@ func applyUTXOChanges(db *pebble.DB, batch *pebble.Batch, block *Block) error {
 	}
 
 	return nil
+}
+
+// BestHeight returns the best local height for one data dir, or -1 when no chain exists yet.
+func BestHeight(dataDir string) (int, error) {
+	bc, err := OpenBlockchain(dataDir)
+	if err != nil {
+		if errors.Is(err, ErrBlockchainNotInitialized) {
+			return -1, nil
+		}
+		return -1, err
+	}
+	defer bc.Close()
+	return bc.Height()
+}
+
+// ImportBlockToDir imports a received block into one on-disk chain.
+func ImportBlockToDir(dataDir string, block *Block) error {
+	if block == nil {
+		return ErrInvalidBlock
+	}
+	if !block.VerifyMerkleRoot() || !block.VerifyProofOfWork() {
+		return ErrInvalidBlock
+	}
+
+	exists, err := ChainExists(dataDir)
+	if err != nil {
+		return err
+	}
+
+	if !exists {
+		if block.Height != 0 {
+			return ErrBlockchainNotInitialized
+		}
+		db, err := openDB(dataDir)
+		if err != nil {
+			return err
+		}
+		defer db.Close()
+
+		encodedBlock, err := block.Serialize()
+		if err != nil {
+			return err
+		}
+		batch := db.NewBatch()
+		defer batch.Close()
+		if err := batch.Set(block.Hash, encodedBlock, nil); err != nil {
+			return err
+		}
+		if err := batch.Set(lastHashKey, block.Hash, nil); err != nil {
+			return err
+		}
+		if err := applyUTXOChanges(db, batch, block); err != nil {
+			return err
+		}
+		return batch.Commit(pebble.Sync)
+	}
+
+	bc, err := OpenBlockchain(dataDir)
+	if err != nil {
+		return err
+	}
+	defer bc.Close()
+	return bc.ImportBlock(block)
 }
 
 type quietLogger struct{}
