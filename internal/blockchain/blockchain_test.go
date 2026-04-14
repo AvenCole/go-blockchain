@@ -33,7 +33,7 @@ func TestCreateBlockchainAndIterate(t *testing.T) {
 		t.Fatalf("genesis transaction should be coinbase")
 	}
 
-	added, tx, err := created.SendTransaction("alice", "bob", 10)
+	added, tx, err := created.SendTransaction("miner", "bob", 10)
 	if err != nil {
 		t.Fatalf("SendTransaction() error = %v", err)
 	}
@@ -57,6 +57,14 @@ func TestCreateBlockchainAndIterate(t *testing.T) {
 
 	if blocks[0].Transactions[0].IDHex() != tx.IDHex() {
 		t.Fatalf("latest tx id = %s, want %s", blocks[0].Transactions[0].IDHex(), tx.IDHex())
+	}
+
+	if len(blocks[0].Transactions[0].Inputs) != 1 {
+		t.Fatalf("len(tx.Inputs) = %d, want 1", len(blocks[0].Transactions[0].Inputs))
+	}
+
+	if len(blocks[0].Transactions[0].Outputs) != 2 {
+		t.Fatalf("len(tx.Outputs) = %d, want 2 (recipient + change)", len(blocks[0].Transactions[0].Outputs))
 	}
 }
 
@@ -149,5 +157,40 @@ func TestBalanceOf(t *testing.T) {
 	}
 	if aliceBalance != 20 {
 		t.Fatalf("BalanceOf(alice) = %d, want 20", aliceBalance)
+	}
+}
+
+func TestFindSpendableOutputsAndUTXO(t *testing.T) {
+	dataDir := filepath.Join(t.TempDir(), "data")
+
+	created, err := CreateBlockchain(dataDir, "miner")
+	if err != nil {
+		t.Fatalf("CreateBlockchain() error = %v", err)
+	}
+	t.Cleanup(func() {
+		_ = created.Close()
+	})
+
+	if _, _, err := created.SendTransaction("miner", "alice", 20); err != nil {
+		t.Fatalf("SendTransaction() error = %v", err)
+	}
+
+	accumulated, spendable, err := created.FindSpendableOutputs("alice", 15)
+	if err != nil {
+		t.Fatalf("FindSpendableOutputs() error = %v", err)
+	}
+	if accumulated != 20 {
+		t.Fatalf("accumulated = %d, want 20", accumulated)
+	}
+	if len(spendable) != 1 {
+		t.Fatalf("len(spendable) = %d, want 1", len(spendable))
+	}
+
+	utxos, err := created.FindUTXO("alice")
+	if err != nil {
+		t.Fatalf("FindUTXO() error = %v", err)
+	}
+	if len(utxos) != 1 || utxos[0].Value != 20 {
+		t.Fatalf("alice utxos = %+v, want one output of 20", utxos)
 	}
 }

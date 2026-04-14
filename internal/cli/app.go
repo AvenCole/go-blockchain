@@ -91,8 +91,8 @@ func (a App) printHelp() {
 	fmt.Fprintln(a.stdout, "  createblockchain [genesis-address]  Create a new blockchain")
 	fmt.Fprintln(a.stdout, "  addblock <label>                    Append a debug coinbase-style block")
 	fmt.Fprintln(a.stdout, "  printchain                       Print the blockchain from tip to genesis")
-	fmt.Fprintln(a.stdout, "  send <from> <to> <amount>        Add a minimal unsigned transaction block")
-	fmt.Fprintln(a.stdout, "  getbalance <address>             Show the naive balance for one address")
+	fmt.Fprintln(a.stdout, "  send <from> <to> <amount>           Add an unsigned UTXO-style transaction block")
+	fmt.Fprintln(a.stdout, "  getbalance <address>                Show the current UTXO balance for one address")
 	fmt.Fprintln(a.stdout, "  createwallet                     Create a new wallet and save it")
 	fmt.Fprintln(a.stdout, "  listaddresses                    List all saved wallet addresses")
 }
@@ -121,7 +121,7 @@ func (a App) printDoctor() {
 	fmt.Fprintf(a.stdout, "log_level=%s\n", a.cfg.LogLevel)
 	fmt.Fprintf(a.stdout, "network_mode=%s\n", a.cfg.NetworkMode)
 	fmt.Fprintf(a.stdout, "chain_status=%s\n", chainStatus)
-	fmt.Fprintln(a.stdout, "next_step=upgrade to UTXO transaction model")
+	fmt.Fprintln(a.stdout, "next_step=implement transaction signatures")
 }
 
 func (a App) createBlockchain(args []string) int {
@@ -208,10 +208,10 @@ func (a App) printChain(args []string) int {
 		for _, tx := range block.Transactions {
 			fmt.Fprintf(a.stdout, "  TxID: %s\n", tx.IDHex())
 			for _, input := range tx.Inputs {
-				fmt.Fprintf(a.stdout, "    Input: from=%s amount=%d\n", input.From, input.Amount)
+				fmt.Fprintf(a.stdout, "    Input: txid=%s out=%d from=%s\n", input.TxIDHex(), input.Out, input.From)
 			}
 			for _, output := range tx.Outputs {
-				fmt.Fprintf(a.stdout, "    Output: to=%s amount=%d\n", output.To, output.Amount)
+				fmt.Fprintf(a.stdout, "    Output: to=%s value=%d\n", output.To, output.Value)
 			}
 		}
 		fmt.Fprintln(a.stdout)
