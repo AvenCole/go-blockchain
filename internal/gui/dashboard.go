@@ -52,6 +52,22 @@ func (s *Service) Dashboard() (DashboardData, error) {
 			DroppedConfirmedCount: status.DroppedConfirmedCount,
 		}
 	}
+	if events, err := bc.RecentChainEvents(5); err == nil && len(events) > 0 {
+		data.RecentEvents = make([]ChainEventView, 0, len(events))
+		for _, event := range events {
+			data.RecentEvents = append(data.RecentEvents, ChainEventView{
+				Timestamp:             event.Timestamp,
+				Kind:                  event.Kind,
+				Summary:               event.Summary,
+				OldHeight:             event.OldHeight,
+				NewHeight:             event.NewHeight,
+				OldTip:                event.OldTip,
+				NewTip:                event.NewTip,
+				RestoredTxCount:       event.RestoredTxCount,
+				DroppedConfirmedCount: event.DroppedConfirmedCount,
+			})
+		}
+	}
 
 	return data, nil
 }

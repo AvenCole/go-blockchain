@@ -593,6 +593,20 @@ func TestReorgRestoresDisconnectedTransactionsToMempool(t *testing.T) {
 	if status.NewHeight != 2 || status.OldHeight != 1 {
 		t.Fatalf("unexpected reorg heights old=%d new=%d", status.OldHeight, status.NewHeight)
 	}
+
+	events, err := created.RecentChainEvents(5)
+	if err != nil {
+		t.Fatalf("RecentChainEvents() error = %v", err)
+	}
+	if len(events) == 0 {
+		t.Fatalf("len(events) = 0, want at least one reorg event")
+	}
+	if events[0].Kind != "reorg" {
+		t.Fatalf("events[0].Kind = %q, want reorg", events[0].Kind)
+	}
+	if events[0].RestoredTxCount != 1 {
+		t.Fatalf("events[0].RestoredTxCount = %d, want 1", events[0].RestoredTxCount)
+	}
 }
 
 func mustNewWallet(t *testing.T) *wallet.Wallet {

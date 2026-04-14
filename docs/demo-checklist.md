@@ -30,6 +30,7 @@
 - [ ] `simfork`
 - [ ] `simreorg`
 - [ ] `showreorg`
+- [ ] `showevents`
 - [ ] `runperf`
 
 ## 四、GUI 演示检查
@@ -44,6 +45,7 @@
 - [ ] 网络页面可启动和连接节点
 - [ ] 控制台页面可执行 CLI 命令
 - [ ] Dashboard / 网络页能显示最近重组状态
+- [ ] Dashboard / 网络页能显示最近链事件列表
 - [ ] 浅色/深色模式切换正常
 
 ## 五、网络演示检查

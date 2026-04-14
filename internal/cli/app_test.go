@@ -539,4 +539,13 @@ func TestSimReorgRestoresTransactionToMempool(t *testing.T) {
 	if !strings.Contains(stdout.String(), "restored_tx=1") {
 		t.Fatalf("showreorg output = %q, want restored_tx=1", stdout.String())
 	}
+	stdout.Reset()
+	stderr.Reset()
+
+	if code := app.Run([]string{"showevents", "3"}); code != 0 {
+		t.Fatalf("showevents exit code = %d, stderr=%q", code, stderr.String())
+	}
+	if !strings.Contains(stdout.String(), "kind=reorg") {
+		t.Fatalf("showevents output = %q, want reorg event", stdout.String())
+	}
 }

@@ -164,4 +164,10 @@ func TestDashboardIncludesLastReorgStatus(t *testing.T) {
 	if dashboard.LastReorg.RestoredTxCount != 1 {
 		t.Fatalf("dashboard.LastReorg.RestoredTxCount = %d, want 1", dashboard.LastReorg.RestoredTxCount)
 	}
+	if len(dashboard.RecentEvents) == 0 {
+		t.Fatalf("len(dashboard.RecentEvents) = 0, want at least one event")
+	}
+	if dashboard.RecentEvents[0].Kind != "reorg" {
+		t.Fatalf("dashboard.RecentEvents[0].Kind = %q, want reorg", dashboard.RecentEvents[0].Kind)
+	}
 }

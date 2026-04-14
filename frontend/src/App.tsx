@@ -390,6 +390,7 @@ function App() {
                     <NetworkPage
                       nodes={nodes}
                       lastReorg={dashboard?.lastReorg ?? null}
+                      recentEvents={dashboard?.recentEvents ?? []}
                       nodeForm={nodeForm}
                       setNodeForm={setNodeForm}
                       connectForm={connectForm}

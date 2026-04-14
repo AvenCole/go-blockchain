@@ -11,11 +11,12 @@ import {
   TextField,
   Typography,
 } from '@mui/material'
-import type { NodeStatus, ReorgStatusView } from '../types'
+import type { ChainEventView, NodeStatus, ReorgStatusView } from '../types'
 
 type NetworkPageProps = {
   nodes: NodeStatus[]
   lastReorg?: ReorgStatusView | null
+  recentEvents?: ChainEventView[]
   nodeForm: { address: string; seed: string; miner: string }
   setNodeForm: React.Dispatch<React.SetStateAction<{ address: string; seed: string; miner: string }>>
   connectForm: { address: string; seed: string }
@@ -28,6 +29,7 @@ type NetworkPageProps = {
 function NetworkPage({
   nodes,
   lastReorg,
+  recentEvents = [],
   nodeForm,
   setNodeForm,
   connectForm,
@@ -51,6 +53,26 @@ function NetworkPage({
           ) : (
             <Typography color="text.secondary" sx={{ mt: 1.5 }}>
               当前还没有记录到链重组事件。
+            </Typography>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card variant="outlined">
+        <CardContent>
+          <Typography variant="h6">最近链事件</Typography>
+          {recentEvents.length > 0 ? (
+            <Stack spacing={1} sx={{ mt: 1.5 }}>
+              {recentEvents.map((event, index) => (
+                <Stack key={`${event.timestamp}-${index}`} spacing={0.25}>
+                  <Typography variant="body2">{event.timestamp} · {event.kind}</Typography>
+                  <Typography variant="body2" color="text.secondary">{event.summary}</Typography>
+                </Stack>
+              ))}
+            </Stack>
+          ) : (
+            <Typography color="text.secondary" sx={{ mt: 1.5 }}>
+              当前还没有记录到链事件。
             </Typography>
           )}
         </CardContent>

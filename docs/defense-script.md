@@ -156,6 +156,20 @@ go run ./cmd/go-blockchain showreorg
 2. 可以展示旧高度 / 新高度
 3. 可以展示恢复交易数和清理交易数
 
+### 5.8 最近链事件列表展示
+
+命令：
+
+```bash
+go run ./cmd/go-blockchain showevents 5
+```
+
+讲解重点：
+
+1. 最近事件不是 GUI 假数据，而是链元数据真实记录
+2. 可以回顾最近若干次链变化
+3. 便于解释系统最近发生过哪些 reorg / 链切换
+
 ### 6. GUI 演示
 
 直接打开桌面程序：

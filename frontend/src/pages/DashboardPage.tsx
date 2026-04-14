@@ -67,6 +67,27 @@ function DashboardPage({ dashboard, latestBlock }: DashboardPageProps) {
           </CardContent>
         </Card>
       </Box>
+      <Box sx={{ gridColumn: '1 / -1' }}>
+        <Card variant="outlined">
+          <CardContent>
+            <Typography variant="h6">最近链事件</Typography>
+            {dashboard.recentEvents.length > 0 ? (
+              <Stack spacing={1.25} sx={{ mt: 2 }}>
+                {dashboard.recentEvents.map((event, index) => (
+                  <Stack key={`${event.timestamp}-${index}`} spacing={0.4}>
+                    <Typography>{event.timestamp} · {event.kind}</Typography>
+                    <Typography color="text.secondary">{event.summary}</Typography>
+                  </Stack>
+                ))}
+              </Stack>
+            ) : (
+              <Typography sx={{ mt: 2 }} color="text.secondary">
+                当前还没有记录到链事件。
+              </Typography>
+            )}
+          </CardContent>
+        </Card>
+      </Box>
     </Box>
   )
 }

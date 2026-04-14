@@ -40,9 +40,24 @@ var lastHashKey = []byte("lh")
 var utxoPrefix = []byte("utxo-")
 var mempoolPrefix = []byte("mempool-")
 var reorgStatusKey = []byte("reorg-status")
+var chainEventLogKey = []byte("chain-events")
+
+const maxChainEvents = 10
 
 type ReorgStatus struct {
 	Timestamp             string `json:"timestamp"`
+	OldHeight             int    `json:"oldHeight"`
+	NewHeight             int    `json:"newHeight"`
+	OldTip                string `json:"oldTip"`
+	NewTip                string `json:"newTip"`
+	RestoredTxCount       int    `json:"restoredTxCount"`
+	DroppedConfirmedCount int    `json:"droppedConfirmedCount"`
+}
+
+type ChainEvent struct {
+	Timestamp             string `json:"timestamp"`
+	Kind                  string `json:"kind"`
+	Summary               string `json:"summary"`
 	OldHeight             int    `json:"oldHeight"`
 	NewHeight             int    `json:"newHeight"`
 	OldTip                string `json:"oldTip"`
@@ -771,6 +786,25 @@ func (bc *Blockchain) LastReorgStatus() (*ReorgStatus, error) {
 	return &status, nil
 }
 
+func (bc *Blockchain) RecentChainEvents(limit int) ([]ChainEvent, error) {
+	encoded, err := loadValue(bc.db, chainEventLogKey)
+	if err != nil {
+		if errors.Is(err, pebble.ErrNotFound) {
+			return []ChainEvent{}, nil
+		}
+		return nil, err
+	}
+
+	var events []ChainEvent
+	if err := json.Unmarshal(encoded, &events); err != nil {
+		return nil, err
+	}
+	if limit > 0 && len(events) > limit {
+		return append([]ChainEvent(nil), events[:limit]...), nil
+	}
+	return append([]ChainEvent(nil), events...), nil
+}
+
 func openDB(dataDir string) (*pebble.DB, error) {
 	if err := os.MkdirAll(dataDir, 0o755); err != nil {
 		return nil, fmt.Errorf("create data dir: %w", err)
@@ -931,7 +965,7 @@ func (bc *Blockchain) switchTip(newTip []byte) error {
 		return err
 	}
 
-	return bc.persistReorgStatus(ReorgStatus{
+	status := ReorgStatus{
 		Timestamp:             time.Now().UTC().Format(time.RFC3339),
 		OldHeight:             oldBlock.Height,
 		NewHeight:             newBlock.Height,
@@ -939,6 +973,20 @@ func (bc *Blockchain) switchTip(newTip []byte) error {
 		NewTip:                newBlock.HashHex(),
 		RestoredTxCount:       restored,
 		DroppedConfirmedCount: dropped,
+	}
+	if err := bc.persistReorgStatus(status); err != nil {
+		return err
+	}
+	return bc.appendChainEvent(ChainEvent{
+		Timestamp:             status.Timestamp,
+		Kind:                  "reorg",
+		Summary:               fmt.Sprintf("reorg %d->%d restored=%d dropped=%d", status.OldHeight, status.NewHeight, status.RestoredTxCount, status.DroppedConfirmedCount),
+		OldHeight:             status.OldHeight,
+		NewHeight:             status.NewHeight,
+		OldTip:                status.OldTip,
+		NewTip:                status.NewTip,
+		RestoredTxCount:       status.RestoredTxCount,
+		DroppedConfirmedCount: status.DroppedConfirmedCount,
 	})
 }
 
@@ -1229,6 +1277,24 @@ func (bc *Blockchain) persistReorgStatus(status ReorgStatus) error {
 		return err
 	}
 	return bc.db.Set(reorgStatusKey, encoded, pebble.Sync)
+}
+
+func (bc *Blockchain) appendChainEvent(event ChainEvent) error {
+	events, err := bc.RecentChainEvents(0)
+	if err != nil {
+		return err
+	}
+
+	events = append([]ChainEvent{event}, events...)
+	if len(events) > maxChainEvents {
+		events = events[:maxChainEvents]
+	}
+
+	encoded, err := json.Marshal(events)
+	if err != nil {
+		return err
+	}
+	return bc.db.Set(chainEventLogKey, encoded, pebble.Sync)
 }
 
 func applyUTXOChanges(db *pebble.DB, batch *pebble.Batch, block *Block) error {

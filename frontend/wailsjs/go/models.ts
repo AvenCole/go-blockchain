@@ -122,6 +122,34 @@ export namespace gui {
 		    return a;
 		}
 	}
+	export class ChainEventView {
+	    timestamp: string;
+	    kind: string;
+	    summary: string;
+	    oldHeight: number;
+	    newHeight: number;
+	    oldTip: string;
+	    newTip: string;
+	    restoredTxCount: number;
+	    droppedConfirmedCount: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new ChainEventView(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.timestamp = source["timestamp"];
+	        this.kind = source["kind"];
+	        this.summary = source["summary"];
+	        this.oldHeight = source["oldHeight"];
+	        this.newHeight = source["newHeight"];
+	        this.oldTip = source["oldTip"];
+	        this.newTip = source["newTip"];
+	        this.restoredTxCount = source["restoredTxCount"];
+	        this.droppedConfirmedCount = source["droppedConfirmedCount"];
+	    }
+	}
 	export class CommandResult {
 	    command: string;
 	    stdout: string;
@@ -175,6 +203,7 @@ export namespace gui {
 	    dataDir: string;
 	    networkMode: string;
 	    lastReorg?: ReorgStatusView;
+	    recentEvents: ChainEventView[];
 	
 	    static createFrom(source: any = {}) {
 	        return new DashboardData(source);
@@ -192,6 +221,7 @@ export namespace gui {
 	        this.dataDir = source["dataDir"];
 	        this.networkMode = source["networkMode"];
 	        this.lastReorg = this.convertValues(source["lastReorg"], ReorgStatusView);
+	        this.recentEvents = this.convertValues(source["recentEvents"], ChainEventView);
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {

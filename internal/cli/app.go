@@ -87,6 +87,8 @@ func (a App) Run(args []string) int {
 		return a.simulateReorgMempoolRecovery(args[1:])
 	case "showreorg":
 		return a.showReorgStatus(args[1:])
+	case "showevents":
+		return a.showChainEvents(args[1:])
 	case "runperf":
 		return a.runPerformance(args[1:])
 	default:
@@ -131,6 +133,7 @@ func (a App) printHelp() {
 	fmt.Fprintln(a.stdout, "  simfork <miner-address> [advance]  Demonstrate longest-chain fork switching")
 	fmt.Fprintln(a.stdout, "  simreorg <from> <to> [amount] [advance]  Demonstrate mempool recovery after a reorg")
 	fmt.Fprintln(a.stdout, "  showreorg                        Show the latest recorded reorg status")
+	fmt.Fprintln(a.stdout, "  showevents [limit]               Show recent recorded chain events")
 	fmt.Fprintln(a.stdout, "  runperf [lookups]                Run cache-vs-scan performance comparison")
 }
 
@@ -862,6 +865,51 @@ func (a App) showReorgStatus(args []string) int {
 	fmt.Fprintf(a.stdout, "old_height=%d old_tip=%s\n", status.OldHeight, status.OldTip)
 	fmt.Fprintf(a.stdout, "new_height=%d new_tip=%s\n", status.NewHeight, status.NewTip)
 	fmt.Fprintf(a.stdout, "restored_tx=%d dropped_confirmed=%d\n", status.RestoredTxCount, status.DroppedConfirmedCount)
+	return 0
+}
+
+func (a App) showChainEvents(args []string) int {
+	if len(args) > 1 {
+		fmt.Fprintln(a.stderr, "showevents accepts at most one argument: [limit]")
+		return 1
+	}
+
+	limit := 5
+	var err error
+	if len(args) == 1 {
+		limit, err = strconv.Atoi(args[0])
+		if err != nil || limit <= 0 {
+			fmt.Fprintf(a.stderr, "parse limit: %v\n", err)
+			return 1
+		}
+	}
+
+	chain, err := blockchain.OpenBlockchain(a.cfg.DataDir)
+	if err != nil {
+		if errors.Is(err, blockchain.ErrBlockchainNotInitialized) {
+			fmt.Fprintln(a.stderr, "blockchain not initialized; run createblockchain first")
+			return 1
+		}
+		fmt.Fprintf(a.stderr, "open blockchain: %v\n", err)
+		return 1
+	}
+	defer chain.Close()
+
+	events, err := chain.RecentChainEvents(limit)
+	if err != nil {
+		fmt.Fprintf(a.stderr, "read chain events: %v\n", err)
+		return 1
+	}
+	if len(events) == 0 {
+		fmt.Fprintln(a.stdout, "no chain events have been recorded")
+		return 0
+	}
+
+	for index, event := range events {
+		fmt.Fprintf(a.stdout, "[%d] %s kind=%s %s\n", index, event.Timestamp, event.Kind, event.Summary)
+		fmt.Fprintf(a.stdout, "    old_height=%d new_height=%d\n", event.OldHeight, event.NewHeight)
+		fmt.Fprintf(a.stdout, "    old_tip=%s new_tip=%s\n", event.OldTip, event.NewTip)
+	}
 	return 0
 }
 

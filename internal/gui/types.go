@@ -11,10 +11,23 @@ type DashboardData struct {
 	DataDir        string           `json:"dataDir"`
 	NetworkMode    string           `json:"networkMode"`
 	LastReorg      *ReorgStatusView `json:"lastReorg,omitempty"`
+	RecentEvents   []ChainEventView `json:"recentEvents"`
 }
 
 type ReorgStatusView struct {
 	Timestamp             string `json:"timestamp"`
+	OldHeight             int    `json:"oldHeight"`
+	NewHeight             int    `json:"newHeight"`
+	OldTip                string `json:"oldTip"`
+	NewTip                string `json:"newTip"`
+	RestoredTxCount       int    `json:"restoredTxCount"`
+	DroppedConfirmedCount int    `json:"droppedConfirmedCount"`
+}
+
+type ChainEventView struct {
+	Timestamp             string `json:"timestamp"`
+	Kind                  string `json:"kind"`
+	Summary               string `json:"summary"`
 	OldHeight             int    `json:"oldHeight"`
 	NewHeight             int    `json:"newHeight"`
 	OldTip                string `json:"oldTip"`

@@ -9,10 +9,23 @@ export type DashboardData = {
   dataDir: string
   networkMode: string
   lastReorg?: ReorgStatusView | null
+  recentEvents: ChainEventView[]
 }
 
 export type ReorgStatusView = {
   timestamp: string
+  oldHeight: number
+  newHeight: number
+  oldTip: string
+  newTip: string
+  restoredTxCount: number
+  droppedConfirmedCount: number
+}
+
+export type ChainEventView = {
+  timestamp: string
+  kind: string
+  summary: string
   oldHeight: number
   newHeight: number
   oldTip: string
