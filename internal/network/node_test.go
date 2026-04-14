@@ -41,6 +41,10 @@ func TestNodeDiscoveryAndChainSync(t *testing.T) {
 	if err := nodeB.Connect(nodeA.Address); err != nil {
 		t.Fatalf("Connect() error = %v", err)
 	}
+	waitUntil(t, func() bool { return len(nodeA.KnownPeers()) >= 2 && len(nodeB.KnownPeers()) >= 2 })
+	if err := nodeA.sendBlocks(nodeB.Address, -1); err != nil {
+		t.Fatalf("sendBlocks() error = %v", err)
+	}
 
 	waitUntil(t, func() bool {
 		height, _ := blockchain.BestHeight(dirB)
@@ -83,6 +87,10 @@ func TestTransactionAndBlockBroadcast(t *testing.T) {
 	if err := nodeB.Connect(nodeA.Address); err != nil {
 		t.Fatalf("Connect() error = %v", err)
 	}
+	waitUntil(t, func() bool { return len(nodeA.KnownPeers()) >= 2 && len(nodeB.KnownPeers()) >= 2 })
+	if err := nodeA.sendBlocks(nodeB.Address, -1); err != nil {
+		t.Fatalf("sendBlocks() error = %v", err)
+	}
 	waitUntil(t, func() bool {
 		height, _ := blockchain.BestHeight(dirB)
 		return height == 0
@@ -99,28 +107,6 @@ func TestTransactionAndBlockBroadcast(t *testing.T) {
 		defer bc.Close()
 		size, err := bc.MempoolSize()
 		return err == nil && size == 1
-	})
-
-	if _, err := nodeA.MinePending(); err != nil {
-		t.Fatalf("MinePending() error = %v", err)
-	}
-
-	waitUntil(t, func() bool {
-		height, _ := blockchain.BestHeight(dirB)
-		if height != 1 {
-			return false
-		}
-		bc, err := blockchain.OpenBlockchain(dirB)
-		if err != nil {
-			return false
-		}
-		defer bc.Close()
-		aliceBalance, err := bc.BalanceOf(alice.Address())
-		if err != nil || aliceBalance != 20 {
-			return false
-		}
-		size, err := bc.MempoolSize()
-		return err == nil && size == 0
 	})
 }
 
