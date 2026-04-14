@@ -28,6 +28,7 @@
 - [ ] `printchain`
 - [ ] `simdouble`
 - [ ] `simfork`
+- [ ] `simreorg`
 - [ ] `runperf`
 
 ## 四、GUI 演示检查

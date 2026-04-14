@@ -520,6 +520,67 @@ func TestImportBlockRejectsUnknownParent(t *testing.T) {
 	}
 }
 
+func TestReorgRestoresDisconnectedTransactionsToMempool(t *testing.T) {
+	dataDir := filepath.Join(t.TempDir(), "data")
+	miner := mustNewWallet(t)
+	alice := mustNewWallet(t)
+
+	created, err := CreateBlockchain(dataDir, miner.Address())
+	if err != nil {
+		t.Fatalf("CreateBlockchain() error = %v", err)
+	}
+	t.Cleanup(func() { _ = created.Close() })
+
+	tx, err := created.SendTransaction(miner, alice.Address(), 20, 0)
+	if err != nil {
+		t.Fatalf("SendTransaction() error = %v", err)
+	}
+	if _, _, err := created.MineMempool(miner.Address()); err != nil {
+		t.Fatalf("MineMempool() error = %v", err)
+	}
+	size, err := created.MempoolSize()
+	if err != nil {
+		t.Fatalf("MempoolSize() error = %v", err)
+	}
+	if size != 0 {
+		t.Fatalf("mempool size after mine = %d, want 0", size)
+	}
+
+	blocks, err := created.Blocks()
+	if err != nil {
+		t.Fatalf("Blocks() error = %v", err)
+	}
+	genesis := blocks[len(blocks)-1]
+
+	fork1 := NewBlock([]Transaction{NewCoinbaseTransaction(miner.Address(), "fork-1")}, genesis.Hash, 1)
+	if err := created.ImportBlock(fork1); err != nil {
+		t.Fatalf("ImportBlock(fork1) error = %v", err)
+	}
+	fork2 := NewBlock([]Transaction{NewCoinbaseTransaction(miner.Address(), "fork-2")}, fork1.Hash, 2)
+	if err := created.ImportBlock(fork2); err != nil {
+		t.Fatalf("ImportBlock(fork2) error = %v", err)
+	}
+
+	pending, err := created.PendingTransactions()
+	if err != nil {
+		t.Fatalf("PendingTransactions() error = %v", err)
+	}
+	if len(pending) != 1 {
+		t.Fatalf("len(pending) = %d, want 1 restored tx", len(pending))
+	}
+	if pending[0].IDHex() != tx.IDHex() {
+		t.Fatalf("restored txid = %s, want %s", pending[0].IDHex(), tx.IDHex())
+	}
+
+	aliceBalance, err := created.BalanceOf(alice.Address())
+	if err != nil {
+		t.Fatalf("BalanceOf(alice) error = %v", err)
+	}
+	if aliceBalance != 0 {
+		t.Fatalf("alice balance after reorg = %d, want 0", aliceBalance)
+	}
+}
+
 func mustNewWallet(t *testing.T) *wallet.Wallet {
 	t.Helper()
 	w, err := wallet.New()

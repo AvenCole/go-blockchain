@@ -128,6 +128,20 @@ go run ./cmd/go-blockchain simfork <miner-address> 2
 2. 当侧链长度超过当前主链后，tip 会切换
 3. 切换后会重建 UTXO，保证账本状态一致
 
+### 5.6 链重组后交易恢复演示
+
+命令：
+
+```bash
+go run ./cmd/go-blockchain simreorg <miner-address> <receiver-address> 20 1
+```
+
+讲解重点：
+
+1. 交易先在旧主链中被确认
+2. 更长分叉切换后，这笔交易会掉出主链
+3. 如果它在新主链下仍然合法，系统会把它恢复回 Mempool
+
 ### 6. GUI 演示
 
 直接打开桌面程序：

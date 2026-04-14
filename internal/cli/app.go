@@ -83,6 +83,8 @@ func (a App) Run(args []string) int {
 		return a.simulateDoubleSpend(args[1:])
 	case "simfork":
 		return a.simulateLongerFork(args[1:])
+	case "simreorg":
+		return a.simulateReorgMempoolRecovery(args[1:])
 	case "runperf":
 		return a.runPerformance(args[1:])
 	default:
@@ -125,6 +127,7 @@ func (a App) printHelp() {
 	fmt.Fprintln(a.stdout, "  printmempool                     List pending transaction IDs")
 	fmt.Fprintln(a.stdout, "  simdouble <from> <to1> <to2> <amount> [fee]  Demonstrate double-spend rejection")
 	fmt.Fprintln(a.stdout, "  simfork <miner-address> [advance]  Demonstrate longest-chain fork switching")
+	fmt.Fprintln(a.stdout, "  simreorg <from> <to> [amount] [advance]  Demonstrate mempool recovery after a reorg")
 	fmt.Fprintln(a.stdout, "  runperf [lookups]                Run cache-vs-scan performance comparison")
 }
 
@@ -709,6 +712,119 @@ func (a App) simulateLongerFork(args []string) int {
 	fmt.Fprintf(a.stdout, "fork_tip=%s fork_height=%d\n", imported.HashHex(), imported.Height)
 	fmt.Fprintf(a.stdout, "after_height=%d after_tip=%s\n", after.Height, after.HashHex())
 	fmt.Fprintf(a.stdout, "switched=%t\n", after.HashHex() == imported.HashHex())
+	return 0
+}
+
+func (a App) simulateReorgMempoolRecovery(args []string) int {
+	if len(args) != 2 && len(args) != 3 && len(args) != 4 {
+		fmt.Fprintln(a.stderr, "simreorg requires: <from> <to> [amount] [advance]")
+		return 1
+	}
+	if !wallet.ValidateAddress(args[0]) || !wallet.ValidateAddress(args[1]) {
+		fmt.Fprintln(a.stderr, "simreorg requires valid from/to wallet addresses")
+		return 1
+	}
+
+	amount := 20
+	advance := 1
+	var err error
+	if len(args) >= 3 {
+		amount, err = strconv.Atoi(args[2])
+		if err != nil || amount <= 0 {
+			fmt.Fprintf(a.stderr, "parse amount: %v\n", err)
+			return 1
+		}
+	}
+	if len(args) == 4 {
+		advance, err = strconv.Atoi(args[3])
+		if err != nil || advance <= 0 {
+			fmt.Fprintf(a.stderr, "parse advance: %v\n", err)
+			return 1
+		}
+	}
+
+	chain, err := blockchain.OpenBlockchain(a.cfg.DataDir)
+	if err != nil {
+		if errors.Is(err, blockchain.ErrBlockchainNotInitialized) {
+			fmt.Fprintln(a.stderr, "blockchain not initialized; run createblockchain first")
+			return 1
+		}
+		fmt.Fprintf(a.stderr, "open blockchain: %v\n", err)
+		return 1
+	}
+	defer chain.Close()
+
+	wallets, err := wallet.NewWallets(a.cfg.DataDir)
+	if err != nil {
+		fmt.Fprintf(a.stderr, "load wallets: %v\n", err)
+		return 1
+	}
+	fromWallet, ok := wallets.GetWallet(args[0])
+	if !ok {
+		fmt.Fprintln(a.stderr, "sender wallet not found")
+		return 1
+	}
+
+	tx, err := chain.SendTransaction(fromWallet, args[1], amount, 0)
+	if err != nil {
+		fmt.Fprintf(a.stderr, "queue tx for reorg demo: %v\n", err)
+		return 1
+	}
+	block, _, err := chain.MineMempool(args[0])
+	if err != nil {
+		fmt.Fprintf(a.stderr, "mine tx before reorg: %v\n", err)
+		return 1
+	}
+
+	blocks, err := chain.Blocks()
+	if err != nil {
+		fmt.Fprintf(a.stderr, "read chain: %v\n", err)
+		return 1
+	}
+	genesis := blocks[len(blocks)-1]
+	current, err := chain.CurrentBlock()
+	if err != nil {
+		fmt.Fprintf(a.stderr, "current block: %v\n", err)
+		return 1
+	}
+
+	targetHeight := current.Height + advance
+	prevHash := append([]byte(nil), genesis.Hash...)
+	for height := 1; height <= targetHeight; height++ {
+		forkBlock := blockchain.NewBlock(
+			[]blockchain.Transaction{blockchain.NewCoinbaseTransaction(args[0], fmt.Sprintf("reorg fork height %d", height))},
+			prevHash,
+			height,
+		)
+		if err := chain.ImportBlock(forkBlock); err != nil {
+			fmt.Fprintf(a.stderr, "import reorg block height=%d: %v\n", height, err)
+			return 1
+		}
+		prevHash = append([]byte(nil), forkBlock.Hash...)
+	}
+
+	pending, err := chain.PendingTransactions()
+	if err != nil {
+		fmt.Fprintf(a.stderr, "pending transactions after reorg: %v\n", err)
+		return 1
+	}
+	restored := false
+	for _, candidate := range pending {
+		if candidate.IDHex() == tx.IDHex() {
+			restored = true
+			break
+		}
+	}
+
+	balance, err := chain.BalanceOf(args[1])
+	if err != nil {
+		fmt.Fprintf(a.stderr, "balance after reorg: %v\n", err)
+		return 1
+	}
+
+	fmt.Fprintf(a.stdout, "mined_block=%s height=%d\n", block.HashHex(), block.Height)
+	fmt.Fprintf(a.stdout, "reorg_tx=%s restored=%t mempool_size=%d\n", tx.IDHex(), restored, len(pending))
+	fmt.Fprintf(a.stdout, "balance_after_reorg[%s]=%d\n", args[1], balance)
 	return 0
 }
 

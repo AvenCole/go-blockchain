@@ -492,3 +492,42 @@ func TestSimForkSwitchesToLongerBranch(t *testing.T) {
 		t.Fatalf("simfork output = %q, want switched=true", stdout.String())
 	}
 }
+
+func TestSimReorgRestoresTransactionToMempool(t *testing.T) {
+	cfg := config.Default()
+	cfg.DataDir = filepath.Join(t.TempDir(), "data")
+
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	app := NewApp(cfg, &stdout, &stderr)
+
+	if code := app.Run([]string{"createwallet"}); code != 0 {
+		t.Fatalf("createwallet miner exit code = %d, stderr=%q", code, stderr.String())
+	}
+	miner := strings.TrimPrefix(strings.TrimSpace(stdout.String()), "created wallet address=")
+	stdout.Reset()
+	stderr.Reset()
+
+	if code := app.Run([]string{"createwallet"}); code != 0 {
+		t.Fatalf("createwallet alice exit code = %d, stderr=%q", code, stderr.String())
+	}
+	alice := strings.TrimPrefix(strings.TrimSpace(stdout.String()), "created wallet address=")
+	stdout.Reset()
+	stderr.Reset()
+
+	if code := app.Run([]string{"createblockchain", miner}); code != 0 {
+		t.Fatalf("createblockchain exit code = %d, stderr=%q", code, stderr.String())
+	}
+	stdout.Reset()
+	stderr.Reset()
+
+	if code := app.Run([]string{"simreorg", miner, alice, "20", "1"}); code != 0 {
+		t.Fatalf("simreorg exit code = %d, stderr=%q", code, stderr.String())
+	}
+	if !strings.Contains(stdout.String(), "restored=true") {
+		t.Fatalf("simreorg output = %q, want restored=true", stdout.String())
+	}
+	if !strings.Contains(stdout.String(), "balance_after_reorg["+alice+"]=0") {
+		t.Fatalf("simreorg output = %q, want alice balance reset", stdout.String())
+	}
+}

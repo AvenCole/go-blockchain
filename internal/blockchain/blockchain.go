@@ -864,6 +864,16 @@ func (bc *Blockchain) ensureNoMempoolConflicts(tx Transaction) error {
 }
 
 func (bc *Blockchain) switchTip(newTip []byte) error {
+	oldTip := append([]byte(nil), bc.tip...)
+	if bytes.Equal(oldTip, newTip) {
+		return nil
+	}
+
+	reorgSet, err := bc.reorgTransactionSet(oldTip, newTip)
+	if err != nil {
+		return err
+	}
+
 	batch := bc.db.NewBatch()
 	defer batch.Close()
 
@@ -875,7 +885,11 @@ func (bc *Blockchain) switchTip(newTip []byte) error {
 	}
 
 	bc.tip = append([]byte(nil), newTip...)
-	return bc.ReindexUTXO()
+	if err := bc.ReindexUTXO(); err != nil {
+		return err
+	}
+
+	return bc.reconcileMempoolAfterReorg(reorgSet)
 }
 
 func (bc *Blockchain) blockByHash(hash []byte) (*Block, error) {
@@ -1046,6 +1060,113 @@ func outputAvailableInState(utxoState map[string][]CachedUTXO, txIDHex string, o
 		}
 	}
 	return false
+}
+
+type reorgTransactionSet struct {
+	confirmedOnNew map[string]struct{}
+	resurrect      []Transaction
+}
+
+func (bc *Blockchain) reorgTransactionSet(oldTip []byte, newTip []byte) (reorgTransactionSet, error) {
+	oldBlocks, err := bc.blocksFromTipHash(oldTip)
+	if err != nil {
+		return reorgTransactionSet{}, err
+	}
+	newBlocks, err := bc.blocksFromTipHash(newTip)
+	if err != nil {
+		return reorgTransactionSet{}, err
+	}
+
+	oldSet := make(map[string]int, len(oldBlocks))
+	for idx, block := range oldBlocks {
+		oldSet[block.HashHex()] = idx
+	}
+
+	commonOldIdx := -1
+	commonNewIdx := -1
+	for idx, block := range newBlocks {
+		if oldIdx, ok := oldSet[block.HashHex()]; ok {
+			commonOldIdx = oldIdx
+			commonNewIdx = idx
+			break
+		}
+	}
+	if commonOldIdx == -1 || commonNewIdx == -1 {
+		return reorgTransactionSet{}, ErrInvalidBlock
+	}
+
+	confirmed := make(map[string]struct{})
+	for _, block := range newBlocks {
+		for _, tx := range block.Transactions {
+			if tx.IsCoinbase() {
+				continue
+			}
+			confirmed[tx.IDHex()] = struct{}{}
+		}
+	}
+
+	var resurrect []Transaction
+	for idx := commonOldIdx - 1; idx >= 0; idx-- {
+		block := oldBlocks[idx]
+		for _, tx := range block.Transactions {
+			if tx.IsCoinbase() {
+				continue
+			}
+			if _, exists := confirmed[tx.IDHex()]; exists {
+				continue
+			}
+			resurrect = append(resurrect, tx.Clone())
+		}
+	}
+
+	return reorgTransactionSet{
+		confirmedOnNew: confirmed,
+		resurrect:      resurrect,
+	}, nil
+}
+
+func (bc *Blockchain) reconcileMempoolAfterReorg(set reorgTransactionSet) error {
+	pending, err := bc.PendingTransactions()
+	if err != nil {
+		return err
+	}
+
+	batch := bc.db.NewBatch()
+	defer batch.Close()
+	for _, tx := range pending {
+		if _, confirmed := set.confirmedOnNew[tx.IDHex()]; confirmed {
+			if err := batch.Delete(mempoolKey(tx.ID), nil); err != nil {
+				return err
+			}
+		}
+	}
+	if err := batch.Commit(pebble.Sync); err != nil {
+		return err
+	}
+
+	existing, err := bc.PendingTransactions()
+	if err != nil {
+		return err
+	}
+	existingSet := make(map[string]struct{}, len(existing))
+	for _, tx := range existing {
+		existingSet[tx.IDHex()] = struct{}{}
+	}
+
+	for _, tx := range set.resurrect {
+		if _, confirmed := set.confirmedOnNew[tx.IDHex()]; confirmed {
+			continue
+		}
+		if _, exists := existingSet[tx.IDHex()]; exists {
+			continue
+		}
+		if err := bc.AddToMempool(tx); err != nil {
+			continue
+		}
+		existingSet[tx.IDHex()] = struct{}{}
+	}
+
+	return nil
 }
 
 func applyUTXOChanges(db *pebble.DB, batch *pebble.Batch, block *Block) error {
