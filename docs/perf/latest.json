@@ -1,15 +1,15 @@
 {
-  "generatedAt": "2026-04-14T06:06:10Z",
+  "generatedAt": "2026-04-14T06:11:42Z",
   "dataDir": "./data",
   "height": 1,
   "addressesTested": 2,
   "lookupsPerAddress": 10,
   "totalLookups": 20,
-  "cachedDurationMs": 1.588,
-  "fullScanDurationMs": 1.056,
-  "speedup": 0.6649874055415617,
+  "cachedDurationMs": 0.542,
+  "fullScanDurationMs": 1.985,
+  "speedup": 3.662361623616236,
   "sampleBalances": {
-    "1F8YSoeJh4ZsFCceZKGBqbhjHRR8xYdvMD": 80,
-    "1NGkqJ2uZftSXf4zqF3Vvw3y4Eq7mkYM3s": 20
+    "1BBemYDDSAshuRjWBunDfqJn3B2aFxMdot": 80,
+    "1PnbQqYq4p6YiHv37pXgKQjo4Sv9JmE4b3": 20
   }
 }

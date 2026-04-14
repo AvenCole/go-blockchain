@@ -333,9 +333,8 @@ func TestRunUnknownCommand(t *testing.T) {
 func TestRunPerf(t *testing.T) {
 	cfg := config.Default()
 	cfg.DataDir = filepath.Join(t.TempDir(), "data")
-	perfDir := filepath.Join("docs", "perf")
-	_ = os.RemoveAll(perfDir)
-	t.Cleanup(func() { _ = os.RemoveAll(perfDir) })
+	perfDir := filepath.Join(t.TempDir(), "perf")
+	t.Setenv(perfOutputDirEnv, perfDir)
 
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer

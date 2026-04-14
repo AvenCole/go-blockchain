@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"syscall"
@@ -19,6 +20,7 @@ import (
 )
 
 const version = "0.1.0"
+const perfOutputDirEnv = "GO_BLOCKCHAIN_PERF_DIR"
 
 // App provides the minimal CLI skeleton approved in Plan 1.
 type App struct {
@@ -647,7 +649,11 @@ func (a App) runPerformance(args []string) int {
 		fmt.Fprintf(a.stderr, "run benchmark: %v\n", err)
 		return 1
 	}
-	if err := blockchain.WriteBalanceBenchmark(result, "docs/perf"); err != nil {
+	outputDir := os.Getenv(perfOutputDirEnv)
+	if outputDir == "" {
+		outputDir = "docs/perf"
+	}
+	if err := blockchain.WriteBalanceBenchmark(result, outputDir); err != nil {
 		fmt.Fprintf(a.stderr, "write benchmark files: %v\n", err)
 		return 1
 	}
@@ -655,6 +661,6 @@ func (a App) runPerformance(args []string) int {
 	fmt.Fprintf(a.stdout, "cached_ms=%.3f\n", result.CachedDurationMs)
 	fmt.Fprintf(a.stdout, "scan_ms=%.3f\n", result.FullScanDurationMs)
 	fmt.Fprintf(a.stdout, "speedup=%.3fx\n", result.Speedup)
-	fmt.Fprintln(a.stdout, "report=docs/perf/latest.md")
+	fmt.Fprintf(a.stdout, "report=%s\n", filepath.Join(outputDir, "latest.md"))
 	return 0
 }
