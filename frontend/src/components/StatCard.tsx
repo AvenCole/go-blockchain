@@ -9,11 +9,17 @@ type StatCardProps = {
 
 function StatCard({ title, value, secondary }: StatCardProps) {
   return (
-    <Card variant="outlined" sx={{ height: '100%' }}>
+    <Card
+      variant="outlined"
+      sx={{
+        height: '100%',
+        backgroundImage: 'none',
+      }}
+    >
       <CardContent>
         <Stack spacing={1.25}>
-          <Chip label={title} size="small" sx={{ alignSelf: 'flex-start' }} />
-          <Typography variant="h5">{value}</Typography>
+          <Chip label={title} size="small" variant="outlined" sx={{ alignSelf: 'flex-start', fontWeight: 600 }} />
+          <Typography variant="h5" sx={{ fontWeight: 700 }}>{value}</Typography>
           {secondary ? (
             <Typography variant="body2" color="text.secondary">
               {secondary}

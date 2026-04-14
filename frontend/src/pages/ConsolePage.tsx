@@ -37,10 +37,11 @@ function ConsolePage({ command, setCommand, history, onExecute }: ConsolePagePro
         sx={{
           p: 2,
           minHeight: 420,
-          bgcolor: '#0b1020',
+          bgcolor: '#0f172a',
           color: '#d6f5d6',
           fontFamily: 'Consolas, monospace',
           overflow: 'auto',
+          borderRadius: 1,
         }}
       >
         <Stack spacing={2}>

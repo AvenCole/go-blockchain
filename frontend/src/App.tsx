@@ -144,19 +144,55 @@ function App() {
                 background: { default: '#f5f7fb', paper: '#ffffff' },
               }),
         },
-        shape: { borderRadius: 14 },
+        shape: { borderRadius: 6 },
         components: {
           MuiCard: {
             styleOverrides: {
               root: {
-                borderRadius: 18,
+                borderRadius: 8,
+                borderWidth: 1,
+                boxShadow: mode === 'dark' ? '0 1px 0 rgba(255,255,255,0.04)' : '0 1px 0 rgba(15,23,42,0.04)',
               },
             },
           },
           MuiPaper: {
             styleOverrides: {
               root: {
-                borderRadius: 18,
+                borderRadius: 8,
+              },
+            },
+          },
+          MuiButton: {
+            styleOverrides: {
+              root: {
+                borderRadius: 6,
+                textTransform: 'none',
+                fontWeight: 600,
+                boxShadow: 'none',
+              },
+            },
+          },
+          MuiChip: {
+            styleOverrides: {
+              root: {
+                borderRadius: 6,
+              },
+            },
+          },
+          MuiOutlinedInput: {
+            styleOverrides: {
+              root: {
+                borderRadius: 6,
+              },
+            },
+          },
+          MuiAccordion: {
+            styleOverrides: {
+              root: {
+                borderRadius: 6,
+                '&:before': {
+                  display: 'none',
+                },
               },
             },
           },
@@ -337,7 +373,7 @@ function App() {
                         justifyContent: 'flex-start',
                         textAlign: 'left',
                         minHeight: 48,
-                        borderRadius: 2,
+                        borderRadius: 1,
                       },
                     }}
                   >

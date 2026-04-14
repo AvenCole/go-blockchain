@@ -29,7 +29,7 @@ function WalletsPage({ wallets, onCreateWallet }: WalletsPageProps) {
             <Stack spacing={1.5} sx={{ mt: 2 }}>
               {wallets.map((item) => (
                 <Card key={item.address} variant="outlined">
-                  <CardContent>
+                  <CardContent sx={{ py: 1.75 }}>
                     <Typography variant="body2" sx={{ wordBreak: 'break-all' }}>
                       {item.address}
                     </Typography>
