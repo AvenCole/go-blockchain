@@ -11,10 +11,11 @@ import {
   TextField,
   Typography,
 } from '@mui/material'
-import type { NodeStatus } from '../types'
+import type { NodeStatus, ReorgStatusView } from '../types'
 
 type NetworkPageProps = {
   nodes: NodeStatus[]
+  lastReorg?: ReorgStatusView | null
   nodeForm: { address: string; seed: string; miner: string }
   setNodeForm: React.Dispatch<React.SetStateAction<{ address: string; seed: string; miner: string }>>
   connectForm: { address: string; seed: string }
@@ -26,6 +27,7 @@ type NetworkPageProps = {
 
 function NetworkPage({
   nodes,
+  lastReorg,
   nodeForm,
   setNodeForm,
   connectForm,
@@ -36,6 +38,24 @@ function NetworkPage({
 }: NetworkPageProps) {
   return (
     <Stack spacing={2.5}>
+      <Card variant="outlined">
+        <CardContent>
+          <Typography variant="h6">链切换观测</Typography>
+          {lastReorg ? (
+            <Stack spacing={0.75} sx={{ mt: 1.5 }}>
+              <Typography variant="body2">最近重组时间：{lastReorg.timestamp}</Typography>
+              <Typography variant="body2">高度变化：{lastReorg.oldHeight} → {lastReorg.newHeight}</Typography>
+              <Typography variant="body2">恢复交易：{lastReorg.restoredTxCount}</Typography>
+              <Typography variant="body2">清理已确认：{lastReorg.droppedConfirmedCount}</Typography>
+            </Stack>
+          ) : (
+            <Typography color="text.secondary" sx={{ mt: 1.5 }}>
+              当前还没有记录到链重组事件。
+            </Typography>
+          )}
+        </CardContent>
+      </Card>
+
       <Stack direction={{ xs: 'column', xl: 'row' }} spacing={2.5}>
         <Card variant="outlined" sx={{ flex: 1 }}>
           <CardContent>

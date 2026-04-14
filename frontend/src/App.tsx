@@ -303,6 +303,7 @@ function App() {
                   <Chip label={`钱包 ${wallets.length}`} color="secondary" variant="outlined" />
                   <Chip label={`Mempool ${mempool.length}`} variant="outlined" />
                   <Chip label={`节点 ${nodes.length}`} variant="outlined" />
+                  {dashboard?.lastReorg ? <Chip label={`最近重组 ${dashboard.lastReorg.newHeight}`} color="warning" variant="outlined" /> : null}
                 </Stack>
               </Stack>
             </Paper>
@@ -388,6 +389,7 @@ function App() {
                   <CardContent>
                     <NetworkPage
                       nodes={nodes}
+                      lastReorg={dashboard?.lastReorg ?? null}
                       nodeForm={nodeForm}
                       setNodeForm={setNodeForm}
                       connectForm={connectForm}

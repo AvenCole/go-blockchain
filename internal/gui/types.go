@@ -1,15 +1,26 @@
 package gui
 
 type DashboardData struct {
-	Height         int    `json:"height"`
-	LatestHash     string `json:"latestHash"`
-	MerkleRoot     string `json:"merkleRoot"`
-	Difficulty     int    `json:"difficulty"`
-	Nonce          int    `json:"nonce"`
-	PendingTxCount int    `json:"pendingTxCount"`
-	WalletCount    int    `json:"walletCount"`
-	DataDir        string `json:"dataDir"`
-	NetworkMode    string `json:"networkMode"`
+	Height         int              `json:"height"`
+	LatestHash     string           `json:"latestHash"`
+	MerkleRoot     string           `json:"merkleRoot"`
+	Difficulty     int              `json:"difficulty"`
+	Nonce          int              `json:"nonce"`
+	PendingTxCount int              `json:"pendingTxCount"`
+	WalletCount    int              `json:"walletCount"`
+	DataDir        string           `json:"dataDir"`
+	NetworkMode    string           `json:"networkMode"`
+	LastReorg      *ReorgStatusView `json:"lastReorg,omitempty"`
+}
+
+type ReorgStatusView struct {
+	Timestamp             string `json:"timestamp"`
+	OldHeight             int    `json:"oldHeight"`
+	NewHeight             int    `json:"newHeight"`
+	OldTip                string `json:"oldTip"`
+	NewTip                string `json:"newTip"`
+	RestoredTxCount       int    `json:"restoredTxCount"`
+	DroppedConfirmedCount int    `json:"droppedConfirmedCount"`
 }
 
 type WalletView struct {

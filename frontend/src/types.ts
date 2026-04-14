@@ -8,6 +8,17 @@ export type DashboardData = {
   walletCount: number
   dataDir: string
   networkMode: string
+  lastReorg?: ReorgStatusView | null
+}
+
+export type ReorgStatusView = {
+  timestamp: string
+  oldHeight: number
+  newHeight: number
+  oldTip: string
+  newTip: string
+  restoredTxCount: number
+  droppedConfirmedCount: number
 }
 
 export type WalletView = {

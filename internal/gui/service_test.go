@@ -6,7 +6,9 @@ import (
 	"strings"
 	"testing"
 
+	"go-blockchain/internal/blockchain"
 	"go-blockchain/internal/config"
+	"go-blockchain/internal/wallet"
 )
 
 func TestNewServiceUsesDedicatedGUIDataDir(t *testing.T) {
@@ -97,5 +99,69 @@ func TestStartAndStopNodeLifecycle(t *testing.T) {
 	}
 	if len(nodes) != 0 {
 		t.Fatalf("len(nodes) after stop = %d, want 0", len(nodes))
+	}
+}
+
+func TestDashboardIncludesLastReorgStatus(t *testing.T) {
+	t.Setenv(guiDataDirEnv, t.TempDir())
+
+	service := NewService()
+	miner, err := wallet.New()
+	if err != nil {
+		t.Fatalf("wallet.New() error = %v", err)
+	}
+	alice, err := wallet.New()
+	if err != nil {
+		t.Fatalf("wallet.New() error = %v", err)
+	}
+
+	chain, err := blockchain.CreateBlockchain(service.cfg.DataDir, miner.Address())
+	if err != nil {
+		t.Fatalf("CreateBlockchain() error = %v", err)
+	}
+
+	tx, err := chain.SendTransaction(miner, alice.Address(), 20, 0)
+	if err != nil {
+		t.Fatalf("SendTransaction() error = %v", err)
+	}
+	if _, _, err := chain.MineMempool(miner.Address()); err != nil {
+		t.Fatalf("MineMempool() error = %v", err)
+	}
+
+	blocks, err := chain.Blocks()
+	if err != nil {
+		t.Fatalf("Blocks() error = %v", err)
+	}
+	genesis := blocks[len(blocks)-1]
+
+	fork1 := blockchain.NewBlock([]blockchain.Transaction{blockchain.NewCoinbaseTransaction(miner.Address(), "fork-1")}, genesis.Hash, 1)
+	if err := chain.ImportBlock(fork1); err != nil {
+		t.Fatalf("ImportBlock(fork1) error = %v", err)
+	}
+	fork2 := blockchain.NewBlock([]blockchain.Transaction{blockchain.NewCoinbaseTransaction(miner.Address(), "fork-2")}, fork1.Hash, 2)
+	if err := chain.ImportBlock(fork2); err != nil {
+		t.Fatalf("ImportBlock(fork2) error = %v", err)
+	}
+
+	pending, err := chain.PendingTransactions()
+	if err != nil {
+		t.Fatalf("PendingTransactions() error = %v", err)
+	}
+	if len(pending) != 1 || pending[0].IDHex() != tx.IDHex() {
+		t.Fatalf("pending tx not restored after reorg")
+	}
+	if err := chain.Close(); err != nil {
+		t.Fatalf("Close() error = %v", err)
+	}
+
+	dashboard, err := service.Dashboard()
+	if err != nil {
+		t.Fatalf("Dashboard() error = %v", err)
+	}
+	if dashboard.LastReorg == nil {
+		t.Fatalf("dashboard.LastReorg = nil, want value")
+	}
+	if dashboard.LastReorg.RestoredTxCount != 1 {
+		t.Fatalf("dashboard.LastReorg.RestoredTxCount = %d, want 1", dashboard.LastReorg.RestoredTxCount)
 	}
 }

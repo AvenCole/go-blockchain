@@ -579,6 +579,20 @@ func TestReorgRestoresDisconnectedTransactionsToMempool(t *testing.T) {
 	if aliceBalance != 0 {
 		t.Fatalf("alice balance after reorg = %d, want 0", aliceBalance)
 	}
+
+	status, err := created.LastReorgStatus()
+	if err != nil {
+		t.Fatalf("LastReorgStatus() error = %v", err)
+	}
+	if status == nil {
+		t.Fatalf("LastReorgStatus() = nil, want status")
+	}
+	if status.RestoredTxCount != 1 {
+		t.Fatalf("status.RestoredTxCount = %d, want 1", status.RestoredTxCount)
+	}
+	if status.NewHeight != 2 || status.OldHeight != 1 {
+		t.Fatalf("unexpected reorg heights old=%d new=%d", status.OldHeight, status.NewHeight)
+	}
 }
 
 func mustNewWallet(t *testing.T) *wallet.Wallet {

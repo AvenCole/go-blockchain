@@ -142,6 +142,20 @@ go run ./cmd/go-blockchain simreorg <miner-address> <receiver-address> 20 1
 2. 更长分叉切换后，这笔交易会掉出主链
 3. 如果它在新主链下仍然合法，系统会把它恢复回 Mempool
 
+### 5.7 最近一次重组状态展示
+
+命令：
+
+```bash
+go run ./cmd/go-blockchain showreorg
+```
+
+讲解重点：
+
+1. 系统会记录最近一次重组时间
+2. 可以展示旧高度 / 新高度
+3. 可以展示恢复交易数和清理交易数
+
 ### 6. GUI 演示
 
 直接打开桌面程序：

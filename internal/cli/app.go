@@ -85,6 +85,8 @@ func (a App) Run(args []string) int {
 		return a.simulateLongerFork(args[1:])
 	case "simreorg":
 		return a.simulateReorgMempoolRecovery(args[1:])
+	case "showreorg":
+		return a.showReorgStatus(args[1:])
 	case "runperf":
 		return a.runPerformance(args[1:])
 	default:
@@ -128,6 +130,7 @@ func (a App) printHelp() {
 	fmt.Fprintln(a.stdout, "  simdouble <from> <to1> <to2> <amount> [fee]  Demonstrate double-spend rejection")
 	fmt.Fprintln(a.stdout, "  simfork <miner-address> [advance]  Demonstrate longest-chain fork switching")
 	fmt.Fprintln(a.stdout, "  simreorg <from> <to> [amount] [advance]  Demonstrate mempool recovery after a reorg")
+	fmt.Fprintln(a.stdout, "  showreorg                        Show the latest recorded reorg status")
 	fmt.Fprintln(a.stdout, "  runperf [lookups]                Run cache-vs-scan performance comparison")
 }
 
@@ -825,6 +828,40 @@ func (a App) simulateReorgMempoolRecovery(args []string) int {
 	fmt.Fprintf(a.stdout, "mined_block=%s height=%d\n", block.HashHex(), block.Height)
 	fmt.Fprintf(a.stdout, "reorg_tx=%s restored=%t mempool_size=%d\n", tx.IDHex(), restored, len(pending))
 	fmt.Fprintf(a.stdout, "balance_after_reorg[%s]=%d\n", args[1], balance)
+	return 0
+}
+
+func (a App) showReorgStatus(args []string) int {
+	if len(args) != 0 {
+		fmt.Fprintln(a.stderr, "showreorg does not accept extra arguments")
+		return 1
+	}
+
+	chain, err := blockchain.OpenBlockchain(a.cfg.DataDir)
+	if err != nil {
+		if errors.Is(err, blockchain.ErrBlockchainNotInitialized) {
+			fmt.Fprintln(a.stderr, "blockchain not initialized; run createblockchain first")
+			return 1
+		}
+		fmt.Fprintf(a.stderr, "open blockchain: %v\n", err)
+		return 1
+	}
+	defer chain.Close()
+
+	status, err := chain.LastReorgStatus()
+	if err != nil {
+		fmt.Fprintf(a.stderr, "read reorg status: %v\n", err)
+		return 1
+	}
+	if status == nil {
+		fmt.Fprintln(a.stdout, "no reorg has been recorded")
+		return 0
+	}
+
+	fmt.Fprintf(a.stdout, "timestamp=%s\n", status.Timestamp)
+	fmt.Fprintf(a.stdout, "old_height=%d old_tip=%s\n", status.OldHeight, status.OldTip)
+	fmt.Fprintf(a.stdout, "new_height=%d new_tip=%s\n", status.NewHeight, status.NewTip)
+	fmt.Fprintf(a.stdout, "restored_tx=%d dropped_confirmed=%d\n", status.RestoredTxCount, status.DroppedConfirmedCount)
 	return 0
 }
 

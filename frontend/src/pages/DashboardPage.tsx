@@ -46,6 +46,27 @@ function DashboardPage({ dashboard, latestBlock }: DashboardPageProps) {
           </CardContent>
         </Card>
       </Box>
+      <Box sx={{ gridColumn: '1 / -1' }}>
+        <Card variant="outlined">
+          <CardContent>
+            <Typography variant="h6">最近链切换 / 重组状态</Typography>
+            {dashboard.lastReorg ? (
+              <Stack spacing={1.25} sx={{ mt: 2 }}>
+                <Typography>时间: {dashboard.lastReorg.timestamp}</Typography>
+                <Typography>旧高度: {dashboard.lastReorg.oldHeight} / 新高度: {dashboard.lastReorg.newHeight}</Typography>
+                <Typography>旧 Tip: {shortHash(dashboard.lastReorg.oldTip, 14, 12)}</Typography>
+                <Typography>新 Tip: {shortHash(dashboard.lastReorg.newTip, 14, 12)}</Typography>
+                <Typography>恢复交易数: {dashboard.lastReorg.restoredTxCount}</Typography>
+                <Typography>清理已确认交易数: {dashboard.lastReorg.droppedConfirmedCount}</Typography>
+              </Stack>
+            ) : (
+              <Typography sx={{ mt: 2 }} color="text.secondary">
+                当前还没有记录到链重组事件。
+              </Typography>
+            )}
+          </CardContent>
+        </Card>
+      </Box>
     </Box>
   )
 }

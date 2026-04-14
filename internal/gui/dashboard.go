@@ -41,6 +41,17 @@ func (s *Service) Dashboard() (DashboardData, error) {
 	data.Difficulty = current.Difficulty
 	data.Nonce = current.Nonce
 	data.PendingTxCount = mempoolSize
+	if status, err := bc.LastReorgStatus(); err == nil && status != nil {
+		data.LastReorg = &ReorgStatusView{
+			Timestamp:             status.Timestamp,
+			OldHeight:             status.OldHeight,
+			NewHeight:             status.NewHeight,
+			OldTip:                status.OldTip,
+			NewTip:                status.NewTip,
+			RestoredTxCount:       status.RestoredTxCount,
+			DroppedConfirmedCount: status.DroppedConfirmedCount,
+		}
+	}
 
 	return data, nil
 }

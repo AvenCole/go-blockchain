@@ -530,4 +530,13 @@ func TestSimReorgRestoresTransactionToMempool(t *testing.T) {
 	if !strings.Contains(stdout.String(), "balance_after_reorg["+alice+"]=0") {
 		t.Fatalf("simreorg output = %q, want alice balance reset", stdout.String())
 	}
+	stdout.Reset()
+	stderr.Reset()
+
+	if code := app.Run([]string{"showreorg"}); code != 0 {
+		t.Fatalf("showreorg exit code = %d, stderr=%q", code, stderr.String())
+	}
+	if !strings.Contains(stdout.String(), "restored_tx=1") {
+		t.Fatalf("showreorg output = %q, want restored_tx=1", stdout.String())
+	}
 }

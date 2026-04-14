@@ -4,11 +4,13 @@ import (
 	"bytes"
 	"crypto/ecdsa"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 	"sort"
+	"time"
 
 	"github.com/cockroachdb/pebble"
 
@@ -37,6 +39,17 @@ var (
 var lastHashKey = []byte("lh")
 var utxoPrefix = []byte("utxo-")
 var mempoolPrefix = []byte("mempool-")
+var reorgStatusKey = []byte("reorg-status")
+
+type ReorgStatus struct {
+	Timestamp             string `json:"timestamp"`
+	OldHeight             int    `json:"oldHeight"`
+	NewHeight             int    `json:"newHeight"`
+	OldTip                string `json:"oldTip"`
+	NewTip                string `json:"newTip"`
+	RestoredTxCount       int    `json:"restoredTxCount"`
+	DroppedConfirmedCount int    `json:"droppedConfirmedCount"`
+}
 
 // Blockchain provides chain storage and append operations.
 type Blockchain struct {
@@ -742,6 +755,22 @@ func (bc *Blockchain) Close() error {
 	return bc.db.Close()
 }
 
+func (bc *Blockchain) LastReorgStatus() (*ReorgStatus, error) {
+	encoded, err := loadValue(bc.db, reorgStatusKey)
+	if err != nil {
+		if errors.Is(err, pebble.ErrNotFound) {
+			return nil, nil
+		}
+		return nil, err
+	}
+
+	var status ReorgStatus
+	if err := json.Unmarshal(encoded, &status); err != nil {
+		return nil, err
+	}
+	return &status, nil
+}
+
 func openDB(dataDir string) (*pebble.DB, error) {
 	if err := os.MkdirAll(dataDir, 0o755); err != nil {
 		return nil, fmt.Errorf("create data dir: %w", err)
@@ -868,6 +897,14 @@ func (bc *Blockchain) switchTip(newTip []byte) error {
 	if bytes.Equal(oldTip, newTip) {
 		return nil
 	}
+	oldBlock, err := bc.blockByHash(oldTip)
+	if err != nil {
+		return err
+	}
+	newBlock, err := bc.blockByHash(newTip)
+	if err != nil {
+		return err
+	}
 
 	reorgSet, err := bc.reorgTransactionSet(oldTip, newTip)
 	if err != nil {
@@ -889,7 +926,20 @@ func (bc *Blockchain) switchTip(newTip []byte) error {
 		return err
 	}
 
-	return bc.reconcileMempoolAfterReorg(reorgSet)
+	restored, dropped, err := bc.reconcileMempoolAfterReorg(reorgSet)
+	if err != nil {
+		return err
+	}
+
+	return bc.persistReorgStatus(ReorgStatus{
+		Timestamp:             time.Now().UTC().Format(time.RFC3339),
+		OldHeight:             oldBlock.Height,
+		NewHeight:             newBlock.Height,
+		OldTip:                oldBlock.HashHex(),
+		NewTip:                newBlock.HashHex(),
+		RestoredTxCount:       restored,
+		DroppedConfirmedCount: dropped,
+	})
 }
 
 func (bc *Blockchain) blockByHash(hash []byte) (*Block, error) {
@@ -1125,34 +1175,37 @@ func (bc *Blockchain) reorgTransactionSet(oldTip []byte, newTip []byte) (reorgTr
 	}, nil
 }
 
-func (bc *Blockchain) reconcileMempoolAfterReorg(set reorgTransactionSet) error {
+func (bc *Blockchain) reconcileMempoolAfterReorg(set reorgTransactionSet) (int, int, error) {
 	pending, err := bc.PendingTransactions()
 	if err != nil {
-		return err
+		return 0, 0, err
 	}
 
 	batch := bc.db.NewBatch()
 	defer batch.Close()
+	dropped := 0
 	for _, tx := range pending {
 		if _, confirmed := set.confirmedOnNew[tx.IDHex()]; confirmed {
 			if err := batch.Delete(mempoolKey(tx.ID), nil); err != nil {
-				return err
+				return 0, 0, err
 			}
+			dropped++
 		}
 	}
 	if err := batch.Commit(pebble.Sync); err != nil {
-		return err
+		return 0, 0, err
 	}
 
 	existing, err := bc.PendingTransactions()
 	if err != nil {
-		return err
+		return 0, 0, err
 	}
 	existingSet := make(map[string]struct{}, len(existing))
 	for _, tx := range existing {
 		existingSet[tx.IDHex()] = struct{}{}
 	}
 
+	restored := 0
 	for _, tx := range set.resurrect {
 		if _, confirmed := set.confirmedOnNew[tx.IDHex()]; confirmed {
 			continue
@@ -1164,9 +1217,18 @@ func (bc *Blockchain) reconcileMempoolAfterReorg(set reorgTransactionSet) error 
 			continue
 		}
 		existingSet[tx.IDHex()] = struct{}{}
+		restored++
 	}
 
-	return nil
+	return restored, dropped, nil
+}
+
+func (bc *Blockchain) persistReorgStatus(status ReorgStatus) error {
+	encoded, err := json.Marshal(status)
+	if err != nil {
+		return err
+	}
+	return bc.db.Set(reorgStatusKey, encoded, pebble.Sync)
 }
 
 func applyUTXOChanges(db *pebble.DB, batch *pebble.Batch, block *Block) error {
