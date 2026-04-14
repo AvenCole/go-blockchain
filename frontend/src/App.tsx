@@ -138,18 +138,18 @@ function App() {
           mode,
           ...(mode === 'dark'
             ? {
-                background: { default: '#0b1020', paper: '#121a2b' },
+                background: { default: '#0d1117', paper: '#161b22' },
               }
             : {
-                background: { default: '#f5f7fb', paper: '#ffffff' },
+                background: { default: '#f3f4f6', paper: '#ffffff' },
               }),
         },
-        shape: { borderRadius: 3 },
+        shape: { borderRadius: 2 },
         components: {
           MuiCard: {
             styleOverrides: {
               root: {
-                borderRadius: 4,
+                borderRadius: 2,
                 borderWidth: 1,
                 boxShadow: 'none',
               },
@@ -158,14 +158,14 @@ function App() {
           MuiPaper: {
             styleOverrides: {
               root: {
-                borderRadius: 4,
+                borderRadius: 2,
               },
             },
           },
           MuiButton: {
             styleOverrides: {
               root: {
-                borderRadius: 3,
+                borderRadius: 2,
                 textTransform: 'none',
                 fontWeight: 600,
                 boxShadow: 'none',
@@ -175,21 +175,21 @@ function App() {
           MuiChip: {
             styleOverrides: {
               root: {
-                borderRadius: 3,
+                borderRadius: 2,
               },
             },
           },
           MuiOutlinedInput: {
             styleOverrides: {
               root: {
-                borderRadius: 3,
+                borderRadius: 2,
               },
             },
           },
           MuiAccordion: {
             styleOverrides: {
               root: {
-                borderRadius: 3,
+                borderRadius: 2,
                 '&:before': {
                   display: 'none',
                 },
@@ -319,11 +319,9 @@ function App() {
               variant="outlined"
               sx={{
                 p: { xs: 2, md: 2.5 },
-                backgroundImage:
-                  mode === 'dark'
-                    ? 'linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.00))'
-                    : 'linear-gradient(180deg, rgba(15,23,42,0.02), rgba(15,23,42,0.00))',
-                borderRadius: 1,
+                backgroundImage: 'none',
+                borderRadius: 0.5,
+                borderColor: 'divider',
               }}
             >
               <Stack
@@ -382,7 +380,7 @@ function App() {
                       <Tab key={item.label} icon={item.icon} iconPosition="start" label={item.label} />
                     ))}
                   </Tabs>
-                  <Paper variant="outlined" sx={{ p: 1.5, mx: 0.5, borderRadius: 0.5 }}>
+                  <Paper variant="outlined" sx={{ p: 1.25, mx: 0.5, borderRadius: 0.5, bgcolor: 'background.paper' }}>
                     <Typography variant="caption" color="text.secondary">
                       数据目录
                     </Typography>

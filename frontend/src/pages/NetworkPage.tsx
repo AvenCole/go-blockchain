@@ -41,7 +41,7 @@ function NetworkPage({
   return (
     <Stack spacing={2.5}>
       <Card variant="outlined">
-        <CardContent>
+        <CardContent sx={{ p: 2 }}>
           <Typography variant="h6">链切换观测</Typography>
           {lastReorg ? (
             <Stack spacing={0.75} sx={{ mt: 1.5 }}>
@@ -59,7 +59,7 @@ function NetworkPage({
       </Card>
 
       <Card variant="outlined">
-        <CardContent>
+        <CardContent sx={{ p: 2 }}>
           <Typography variant="h6">最近链事件</Typography>
           {recentEvents.length > 0 ? (
             <Stack spacing={1} sx={{ mt: 1.5 }}>
@@ -80,7 +80,7 @@ function NetworkPage({
 
       <Stack direction={{ xs: 'column', xl: 'row' }} spacing={2.5}>
         <Card variant="outlined" sx={{ flex: 1 }}>
-          <CardContent>
+          <CardContent sx={{ p: 2 }}>
             <Typography variant="h6">启动本地节点</Typography>
             <Typography color="text.secondary" sx={{ mt: 1 }}>
               在 GUI 中直接拉起 TCP 节点，便于演示节点监听、矿工地址绑定和种子接入。
@@ -115,7 +115,7 @@ function NetworkPage({
         </Card>
 
         <Card variant="outlined" sx={{ flex: 1 }}>
-          <CardContent>
+          <CardContent sx={{ p: 2 }}>
             <Typography variant="h6">连接已有节点</Typography>
             <Typography color="text.secondary" sx={{ mt: 1 }}>
               用于演示节点发现和同步入口，先选择一个本地节点，再指定种子地址。
@@ -144,7 +144,7 @@ function NetworkPage({
       </Stack>
 
       <Card variant="outlined">
-        <CardContent>
+        <CardContent sx={{ p: 2 }}>
           <Stack
             direction={{ xs: 'column', md: 'row' }}
             spacing={1.5}

@@ -30,7 +30,7 @@ function TransactionsPage({
     <Box sx={{ display: 'grid', gap: 2, gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' } }}>
       <Box>
         <Card variant="outlined">
-          <CardContent>
+          <CardContent sx={{ p: 2 }}>
             <Typography variant="h6">发送交易</Typography>
             <Typography color="text.secondary" sx={{ mt: 1 }}>
               这里的发送动作会把交易排队进入 mempool，而不是立刻成块。
@@ -47,7 +47,7 @@ function TransactionsPage({
       </Box>
       <Box>
         <Card variant="outlined">
-          <CardContent>
+          <CardContent sx={{ p: 2 }}>
             <Typography variant="h6">挖矿与交易池</Typography>
             <Typography color="text.secondary" sx={{ mt: 1 }}>
               指定矿工地址后，当前待打包交易会被统一出块。

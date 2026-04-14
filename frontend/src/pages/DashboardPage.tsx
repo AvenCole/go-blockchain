@@ -28,7 +28,7 @@ function DashboardPage({ dashboard, latestBlock }: DashboardPageProps) {
       </Box>
       <Box sx={{ gridColumn: '1 / -1' }}>
         <Card variant="outlined">
-          <CardContent>
+          <CardContent sx={{ p: 2 }}>
             <Typography variant="h6">最新区块</Typography>
             {latestBlock ? (
               <Stack spacing={1.25} sx={{ mt: 2 }}>
@@ -49,7 +49,7 @@ function DashboardPage({ dashboard, latestBlock }: DashboardPageProps) {
       </Box>
       <Box sx={{ gridColumn: '1 / -1' }}>
         <Card variant="outlined">
-          <CardContent>
+          <CardContent sx={{ p: 2 }}>
             <Typography variant="h6">最近链切换 / 重组状态</Typography>
             {dashboard.lastReorg ? (
               <Stack spacing={1.25} sx={{ mt: 2 }}>
@@ -70,7 +70,7 @@ function DashboardPage({ dashboard, latestBlock }: DashboardPageProps) {
       </Box>
       <Box sx={{ gridColumn: '1 / -1' }}>
         <Card variant="outlined">
-          <CardContent>
+          <CardContent sx={{ p: 2 }}>
             <Typography variant="h6">最近链事件</Typography>
             {recentEvents.length > 0 ? (
               <Stack spacing={1.25} sx={{ mt: 2 }}>

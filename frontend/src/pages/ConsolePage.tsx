@@ -12,7 +12,7 @@ function ConsolePage({ command, setCommand, history, onExecute }: ConsolePagePro
   return (
     <Stack spacing={2}>
       <Card variant="outlined">
-        <CardContent>
+        <CardContent sx={{ p: 2 }}>
           <Typography variant="h6">终端控制台</Typography>
           <Typography color="text.secondary" sx={{ mt: 1 }}>
             可直接输入 CLI 命令进行演示，适合答辩时展示终端链路。
@@ -42,6 +42,7 @@ function ConsolePage({ command, setCommand, history, onExecute }: ConsolePagePro
           fontFamily: 'Consolas, monospace',
           overflow: 'auto',
           borderRadius: 0.5,
+          borderColor: 'divider',
         }}
       >
         <Stack spacing={2}>

@@ -12,7 +12,7 @@ function BlocksPage({ blocks }: BlocksPageProps) {
     <Stack spacing={2}>
       {blocks.map((block) => (
         <Card key={block.hash} variant="outlined">
-          <CardContent>
+          <CardContent sx={{ p: 2 }}>
             <Stack direction="row" spacing={1} sx={{ justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap' }}>
               <Typography variant="h6">区块 #{block.height}</Typography>
               <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap' }}>
