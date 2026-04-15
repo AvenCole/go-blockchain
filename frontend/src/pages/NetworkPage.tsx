@@ -12,6 +12,8 @@ import {
   TextField,
   Typography,
 } from '@mui/material'
+import NetworkTimelineCard from '../components/network/NetworkTimelineCard'
+import NetworkTopologyCard from '../components/network/NetworkTopologyCard'
 import type {
   ChainEventView,
   NetworkDemoResult,
@@ -78,13 +80,13 @@ function NetworkPage({
       <Stack direction={{ xs: 'column', xl: 'row' }} spacing={2.5}>
         <Card variant="outlined" sx={{ flex: 1 }}>
           <CardContent sx={{ p: 2 }}>
-            <Typography variant="h6">一键网络演示</Typography>
+            <Typography variant="h6">快速同步场景</Typography>
             <Typography color="text.secondary" sx={{ mt: 1 }}>
-              自动创建双节点同步场景：准备钱包、启动两个节点、初始化主节点链、连接 peer、发送交易并挖矿。
+              自动创建双节点同步流程：准备钱包、启动节点、初始化主节点链、连接 peer、发送交易并挖矿。
             </Typography>
             <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} sx={{ mt: 2.5, alignItems: { md: 'center' } }}>
               <Button variant="contained" color="primary" onClick={onRunNetworkQuickDemo}>
-                运行快速演示
+                运行快速同步
               </Button>
               {networkDemo ? (
                 <Stack spacing={0.5}>
@@ -94,7 +96,7 @@ function NetworkPage({
                 </Stack>
               ) : (
                 <Typography variant="body2" color="text.secondary">
-                  适合答辩时快速搭建“节点同步 + 交易广播 + 出块同步”演示链路。
+                  执行后会返回 source、peer、peerHeight 和 tipAnnounced。
                 </Typography>
               )}
             </Stack>
@@ -103,13 +105,13 @@ function NetworkPage({
 
         <Card variant="outlined" sx={{ flex: 1 }}>
           <CardContent sx={{ p: 2 }}>
-            <Typography variant="h6">一键分叉 / 重组演示</Typography>
+            <Typography variant="h6">分叉 / 重组场景</Typography>
             <Typography color="text.secondary" sx={{ mt: 1 }}>
-              先让双节点同步一笔已确认交易，再在主节点注入更长分叉链并触发 peer 重新同步，直接演示 reorg 与交易回滚恢复。
+              创建已确认交易后注入更长分叉链，并触发 peer 重新同步，用于检查 reorg 与交易恢复。
             </Typography>
             <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} sx={{ mt: 2.5, alignItems: { md: 'center' } }}>
               <Button variant="contained" color="secondary" onClick={onRunNetworkReorgDemo}>
-                运行重组演示
+                运行重组流程
               </Button>
               {networkReorgDemo ? (
                 <Stack spacing={0.5}>
@@ -123,7 +125,7 @@ function NetworkPage({
                 </Stack>
               ) : (
                 <Typography variant="body2" color="text.secondary">
-                  适合答辩时直观展示“已确认交易如何因更长链被回滚并回到 mempool”。
+                  执行后可查看 sourceHeight、restored 和 peerReorged。
                 </Typography>
               )}
             </Stack>
@@ -132,13 +134,13 @@ function NetworkPage({
 
         <Card variant="outlined" sx={{ flex: 1 }}>
           <CardContent sx={{ p: 2 }}>
-            <Typography variant="h6">三节点分区 / 合流演示</Typography>
+            <Typography variant="h6">三节点分区 / 合流</Typography>
             <Typography color="text.secondary" sx={{ mt: 1 }}>
-              先让 source 与 peer 形成已确认旧主链，再让隔离 fork 节点离线长出更长分叉，最后合流并观察三节点收敛到同一新 tip。
+              构造 source、peer、fork 三节点分区，再在合流后检查所有节点是否收敛到同一 tip。
             </Typography>
             <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} sx={{ mt: 2.5, alignItems: { md: 'center' } }}>
               <Button variant="contained" color="inherit" onClick={onRunNetworkPartitionDemo}>
-                运行三节点演示
+                运行分区流程
               </Button>
               {networkPartitionDemo ? (
                 <Stack spacing={0.5}>
@@ -152,12 +154,21 @@ function NetworkPage({
                 </Stack>
               ) : (
                 <Typography variant="body2" color="text.secondary">
-                  适合答辩时展示“网络分区后合流，所有节点最终重新收敛到同一最长链”。
+                  执行后可查看 restored、converged 和 forkHeight。
                 </Typography>
               )}
             </Stack>
           </CardContent>
         </Card>
+      </Stack>
+
+      <Stack direction={{ xs: 'column', xl: 'row' }} spacing={2.5}>
+        <Stack sx={{ flex: 1, minWidth: 0 }}>
+          <NetworkTopologyCard nodes={nodes} />
+        </Stack>
+        <Stack sx={{ flex: 1, minWidth: 0 }}>
+          <NetworkTimelineCard nodes={nodes} recentEvents={recentEvents} />
+        </Stack>
       </Stack>
 
       <Card variant="outlined">
@@ -203,7 +214,7 @@ function NetworkPage({
           <CardContent sx={{ p: 2 }}>
             <Typography variant="h6">启动本地节点</Typography>
             <Typography color="text.secondary" sx={{ mt: 1 }}>
-              在 GUI 中直接拉起 TCP 节点，便于演示节点监听、矿工地址绑定和种子接入。
+              在当前窗口启动 TCP 节点，并设置监听地址、种子节点与矿工地址。
             </Typography>
             <Stack spacing={2} sx={{ mt: 2.5 }}>
               <TextField
@@ -238,7 +249,7 @@ function NetworkPage({
           <CardContent sx={{ p: 2 }}>
             <Typography variant="h6">连接已有节点</Typography>
             <Typography color="text.secondary" sx={{ mt: 1 }}>
-              用于演示节点发现和同步入口，先选择一个本地节点，再指定种子地址。
+              选择一个本地节点并指定种子地址，建立连接。
             </Typography>
             <Stack spacing={2} sx={{ mt: 2.5 }}>
               <TextField
@@ -267,7 +278,7 @@ function NetworkPage({
         <CardContent sx={{ p: 2 }}>
           <Typography variant="h6">节点链控制</Typography>
           <Typography color="text.secondary" sx={{ mt: 1 }}>
-            直接在 GUI 中初始化节点链、通过指定节点发送交易，并触发该节点挖矿，适合演示网络节点完整生命周期。
+            对指定节点执行链初始化、交易发送和挖矿。
           </Typography>
 
           <Stack spacing={2} sx={{ mt: 2.5 }}>
@@ -396,7 +407,7 @@ function NetworkPage({
           <List sx={{ mt: 2 }}>
             {nodes.length === 0 ? (
               <ListItem>
-                <ListItemText primary="当前还没有运行中的 GUI 节点" secondary="可先使用上方表单启动一个本地节点，再执行连接演示。" />
+                <ListItemText primary="当前还没有运行中的 GUI 节点" secondary="可先使用上方表单启动一个本地节点。" />
               </ListItem>
             ) : (
               nodes.map((node) => (
