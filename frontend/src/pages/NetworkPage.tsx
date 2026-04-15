@@ -9,6 +9,7 @@ import {
   Typography,
 } from '@mui/material'
 import FocusedNodeCard from '../components/network/FocusedNodeCard'
+import EventFilterToolbar from '../components/network/EventFilterToolbar'
 import NodeDirectoryCard from '../components/network/NodeDirectoryCard'
 import NetworkTimelineCard from '../components/network/NetworkTimelineCard'
 import NetworkTopologyCard from '../components/network/NetworkTopologyCard'
@@ -21,6 +22,7 @@ import type {
   ReorgStatusView,
   WalletView,
 } from '../types'
+import { collectKinds, filterChainEvents } from '../utils/networkView'
 
 type NetworkPageProps = {
   nodes: NodeStatus[]
@@ -74,6 +76,8 @@ function NetworkPage({
   onRunNetworkPartitionDemo,
 }: NetworkPageProps) {
   const [focusedNodeAddress, setFocusedNodeAddress] = useState('')
+  const [chainEventQuery, setChainEventQuery] = useState('')
+  const [chainEventKind, setChainEventKind] = useState('')
 
   useEffect(() => {
     if (nodes.length === 0) {
@@ -105,6 +109,20 @@ function NetworkPage({
     () => nodes.find((node) => node.address === focusedNodeAddress) ?? null,
     [focusedNodeAddress, nodes],
   )
+  const chainEventKindOptions = useMemo(
+    () => collectKinds(recentEvents),
+    [recentEvents],
+  )
+  const filteredChainEvents = useMemo(
+    () => filterChainEvents(recentEvents, { kind: chainEventKind, query: chainEventQuery }).slice(0, 12),
+    [chainEventKind, chainEventQuery, recentEvents],
+  )
+
+  useEffect(() => {
+    if (chainEventKind && !chainEventKindOptions.includes(chainEventKind)) {
+      setChainEventKind('')
+    }
+  }, [chainEventKind, chainEventKindOptions])
 
   return (
     <Stack spacing={2.5}>
@@ -253,14 +271,29 @@ function NetworkPage({
       <Card variant="outlined">
         <CardContent sx={{ p: 2 }}>
           <Typography variant="h6">最近链事件</Typography>
+          <EventFilterToolbar
+            query={chainEventQuery}
+            onQueryChange={setChainEventQuery}
+            kind={chainEventKind}
+            kindOptions={chainEventKindOptions}
+            onKindChange={setChainEventKind}
+            matchedCount={filteredChainEvents.length}
+            totalCount={recentEvents.length}
+          />
           {recentEvents.length > 0 ? (
             <Stack spacing={1} sx={{ mt: 1.5 }}>
-              {recentEvents.map((event, index) => (
+              {filteredChainEvents.length > 0 ? (
+                filteredChainEvents.map((event, index) => (
                 <Stack key={`${event.timestamp}-${index}`} spacing={0.25}>
                   <Typography variant="body2">{event.timestamp} · {event.kind}</Typography>
                   <Typography variant="body2" color="text.secondary">{event.summary}</Typography>
                 </Stack>
-              ))}
+                ))
+              ) : (
+                <Typography color="text.secondary">
+                  当前筛选条件下没有匹配的链事件。
+                </Typography>
+              )}
             </Stack>
           ) : (
             <Typography color="text.secondary" sx={{ mt: 1.5 }}>

@@ -1,3 +1,4 @@
+import { useEffect, useMemo, useState } from 'react'
 import {
   Button,
   Card,
@@ -9,7 +10,13 @@ import {
   Typography,
 } from '@mui/material'
 import type { NodeStatus } from '../../types'
-import { shortAddress, shortHash } from '../../utils/networkView'
+import {
+  collectKinds,
+  filterNodeEvents,
+  shortAddress,
+  shortHash,
+} from '../../utils/networkView'
+import EventFilterToolbar from './EventFilterToolbar'
 
 type FocusedNodeCardProps = {
   node: NodeStatus | null
@@ -26,6 +33,26 @@ function FocusedNodeCard({
   onUseAsControlNode,
   onStopNode,
 }: FocusedNodeCardProps) {
+  const [eventQuery, setEventQuery] = useState('')
+  const [eventKind, setEventKind] = useState('')
+  const nodeEvents = node?.recentEvents ?? []
+  const eventKindOptions = useMemo(() => collectKinds(nodeEvents), [nodeEvents])
+  const filteredNodeEvents = useMemo(
+    () => filterNodeEvents(nodeEvents, { kind: eventKind, query: eventQuery }).slice(0, 12),
+    [eventKind, eventQuery, nodeEvents],
+  )
+
+  useEffect(() => {
+    setEventQuery('')
+    setEventKind('')
+  }, [node?.address])
+
+  useEffect(() => {
+    if (eventKind && !eventKindOptions.includes(eventKind)) {
+      setEventKind('')
+    }
+  }, [eventKind, eventKindOptions])
+
   return (
     <Card variant="outlined">
       <CardContent sx={{ p: 2 }}>
@@ -135,13 +162,26 @@ function FocusedNodeCard({
             <Paper variant="outlined" sx={{ p: 1.5 }}>
               <Stack spacing={1}>
                 <Typography variant="subtitle2">最近网络事件</Typography>
+                <EventFilterToolbar
+                  query={eventQuery}
+                  onQueryChange={setEventQuery}
+                  kind={eventKind}
+                  kindOptions={eventKindOptions}
+                  onKindChange={setEventKind}
+                  matchedCount={filteredNodeEvents.length}
+                  totalCount={nodeEvents.length}
+                />
                 <Divider />
-                {(node.recentEvents ?? []).length === 0 ? (
+                {nodeEvents.length === 0 ? (
                   <Typography variant="body2" color="text.secondary">
                     暂无网络事件
                   </Typography>
+                ) : filteredNodeEvents.length === 0 ? (
+                  <Typography variant="body2" color="text.secondary">
+                    当前筛选条件下没有匹配的节点事件
+                  </Typography>
                 ) : (
-                  (node.recentEvents ?? []).slice(0, 8).map((event, index) => (
+                  filteredNodeEvents.map((event, index) => (
                     <Stack key={`${node.address}-recent-${index}`} spacing={0.25}>
                       <Typography variant="body2">
                         {event.timestamp} · {event.kind}

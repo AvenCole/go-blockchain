@@ -33,6 +33,17 @@ export type NetworkTimelineItem = {
   order: number
 }
 
+type TextMatchable = {
+  kind: string
+  timestamp: string
+}
+
+type DetailMatchable = TextMatchable & {
+  detail?: string
+  summary?: string
+  source?: string
+}
+
 export function shortAddress(value: string, head = 8, tail = 6): string {
   if (!value || value.length <= head + tail + 3) {
     return value || '(none)'
@@ -112,7 +123,7 @@ export function buildTopology(nodes: NodeStatus[]) {
   }
 }
 
-export function buildTimeline(nodes: NodeStatus[], chainEvents: ChainEventView[], limit = 18): NetworkTimelineItem[] {
+export function buildTimeline(nodes: NodeStatus[], chainEvents: ChainEventView[]): NetworkTimelineItem[] {
   const timeline: NetworkTimelineItem[] = []
 
   for (const [index, event] of chainEvents.entries()) {
@@ -141,7 +152,68 @@ export function buildTimeline(nodes: NodeStatus[], chainEvents: ChainEventView[]
     }
   }
 
-  return timeline.sort((left, right) => right.order - left.order).slice(0, limit)
+  return timeline.sort((left, right) => right.order - left.order)
+}
+
+export function collectKinds<T extends TextMatchable>(items: T[]): string[] {
+  return [...new Set(items.map((item) => item.kind).filter(Boolean))].sort((left, right) =>
+    left.localeCompare(right),
+  )
+}
+
+export function collectSources(items: NetworkTimelineItem[]): string[] {
+  return [...new Set(items.map((item) => item.source).filter(Boolean))].sort((left, right) =>
+    left.localeCompare(right),
+  )
+}
+
+export function filterTimelineItems(
+  items: NetworkTimelineItem[],
+  filters: { kind?: string; source?: string; query?: string },
+): NetworkTimelineItem[] {
+  return items.filter((item) => {
+    if (filters.kind && item.kind !== filters.kind) {
+      return false
+    }
+    if (filters.source && item.source !== filters.source) {
+      return false
+    }
+    return matchesQuery(item, filters.query)
+  })
+}
+
+export function filterChainEvents(
+  events: ChainEventView[],
+  filters: { kind?: string; query?: string },
+): ChainEventView[] {
+  return events.filter((event) => {
+    if (filters.kind && event.kind !== filters.kind) {
+      return false
+    }
+    return matchesQuery(
+      {
+        kind: event.kind,
+        timestamp: event.timestamp,
+        summary: event.summary,
+      },
+      filters.query,
+    )
+  })
+}
+
+export function filterNodeEvents<
+  T extends {
+    kind: string
+    timestamp: string
+    detail: string
+  },
+>(events: T[], filters: { kind?: string; query?: string }): T[] {
+  return events.filter((event) => {
+    if (filters.kind && event.kind !== filters.kind) {
+      return false
+    }
+    return matchesQuery(event, filters.query)
+  })
 }
 
 function toneForKind(kind: string): NetworkTimelineItem['tone'] {
@@ -174,4 +246,23 @@ function toneForKind(kind: string): NetworkTimelineItem['tone'] {
 function parseEventTime(timestamp: string): number {
   const value = Date.parse(timestamp)
   return Number.isNaN(value) ? 0 : value
+}
+
+function matchesQuery(item: DetailMatchable, query?: string): boolean {
+  const normalizedQuery = normalizeText(query)
+  if (!normalizedQuery) {
+    return true
+  }
+
+  const haystack = normalizeText(
+    [item.kind, item.timestamp, item.source, item.detail, item.summary]
+      .filter(Boolean)
+      .join(' '),
+  )
+
+  return haystack.includes(normalizedQuery)
+}
+
+function normalizeText(value?: string): string {
+  return (value ?? '').trim().toLowerCase()
 }
