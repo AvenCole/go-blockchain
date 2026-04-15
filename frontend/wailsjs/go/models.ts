@@ -291,6 +291,40 @@ export namespace gui {
 	        this.tipAnnounced = source["tipAnnounced"];
 	    }
 	}
+	export class NetworkReorgDemoResult {
+	    sourceNode: string;
+	    peerNode: string;
+	    minerAddress: string;
+	    receiverAddress: string;
+	    originalBlockHash: string;
+	    originalBlockHeight: number;
+	    reorgTxID: string;
+	    restored: boolean;
+	    sourceOldHeight: number;
+	    sourceNewHeight: number;
+	    peerHeight: number;
+	    peerReorged: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new NetworkReorgDemoResult(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.sourceNode = source["sourceNode"];
+	        this.peerNode = source["peerNode"];
+	        this.minerAddress = source["minerAddress"];
+	        this.receiverAddress = source["receiverAddress"];
+	        this.originalBlockHash = source["originalBlockHash"];
+	        this.originalBlockHeight = source["originalBlockHeight"];
+	        this.reorgTxID = source["reorgTxID"];
+	        this.restored = source["restored"];
+	        this.sourceOldHeight = source["sourceOldHeight"];
+	        this.sourceNewHeight = source["sourceNewHeight"];
+	        this.peerHeight = source["peerHeight"];
+	        this.peerReorged = source["peerReorged"];
+	    }
+	}
 	export class NodeEventView {
 	    timestamp: string;
 	    kind: string;
@@ -316,6 +350,7 @@ export namespace gui {
 	    mempoolCount: number;
 	    running: boolean;
 	    orphanCount: number;
+	    lastReorg?: ReorgStatusView;
 	    recentEvents: NodeEventView[];
 	
 	    static createFrom(source: any = {}) {
@@ -332,6 +367,7 @@ export namespace gui {
 	        this.mempoolCount = source["mempoolCount"];
 	        this.running = source["running"];
 	        this.orphanCount = source["orphanCount"];
+	        this.lastReorg = this.convertValues(source["lastReorg"], ReorgStatusView);
 	        this.recentEvents = this.convertValues(source["recentEvents"], NodeEventView);
 	    }
 	

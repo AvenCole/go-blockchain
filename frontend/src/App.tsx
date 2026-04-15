@@ -54,11 +54,21 @@ import {
   queueSpendMultiSigTransaction,
   queueTransaction,
   runNetworkQuickDemo,
+  runNetworkReorgDemo,
   startNode,
   stopNode,
   submitNodeTransaction,
 } from './api/backend'
-import type { BlockView, CommandResult, DashboardData, MultiSigOutputView, NetworkDemoResult, NodeStatus, WalletView } from './types'
+import type {
+  BlockView,
+  CommandResult,
+  DashboardData,
+  MultiSigOutputView,
+  NetworkDemoResult,
+  NetworkReorgDemoResult,
+  NodeStatus,
+  WalletView,
+} from './types'
 
 type NavItem = {
   label: string
@@ -88,6 +98,7 @@ function App() {
   const [message, setMessage] = useState('')
   const [error, setError] = useState('')
   const [networkDemo, setNetworkDemo] = useState<NetworkDemoResult | null>(null)
+  const [networkReorgDemo, setNetworkReorgDemo] = useState<NetworkReorgDemoResult | null>(null)
   const [txForm, setTxForm] = useState({
     template: 'p2pkh' as 'p2pkh' | 'p2pk' | 'multisig',
     from: '',
@@ -413,6 +424,18 @@ function App() {
     }
   }
 
+  const handleRunNetworkReorgDemo = async () => {
+    try {
+      setError('')
+      const result = await runNetworkReorgDemo()
+      setNetworkReorgDemo(result)
+      setMessage(`网络重组演示已完成：${result.sourceNode} -> ${result.peerNode}`)
+      await refresh()
+    } catch (err) {
+      setError(String(err))
+    }
+  }
+
   const handleSpendMultiSig = async () => {
     try {
       setError('')
@@ -585,6 +608,7 @@ function App() {
                       nodes={nodes}
                       wallets={wallets}
                       networkDemo={networkDemo}
+                      networkReorgDemo={networkReorgDemo}
                       lastReorg={dashboard?.lastReorg ?? null}
                       recentEvents={dashboard?.recentEvents ?? []}
                       nodeForm={nodeForm}
@@ -600,6 +624,7 @@ function App() {
                       onSubmitNodeTransaction={handleSubmitNodeTransaction}
                       onMineNode={handleMineNode}
                       onRunNetworkQuickDemo={handleRunNetworkQuickDemo}
+                      onRunNetworkReorgDemo={handleRunNetworkReorgDemo}
                     />
                   </CardContent>
                 </Card>

@@ -16,6 +16,7 @@ import (
 
 	"go-blockchain/internal/blockchain"
 	"go-blockchain/internal/config"
+	"go-blockchain/internal/demo"
 	"go-blockchain/internal/network"
 	"go-blockchain/internal/wallet"
 )
@@ -1053,7 +1054,10 @@ func (a App) simulateReorgMempoolRecovery(args []string) int {
 		fmt.Fprintf(a.stderr, "open blockchain: %v\n", err)
 		return 1
 	}
-	defer chain.Close()
+	if err := chain.Close(); err != nil {
+		fmt.Fprintf(a.stderr, "close blockchain: %v\n", err)
+		return 1
+	}
 
 	wallets, err := wallet.NewWallets(a.cfg.DataDir)
 	if err != nil {
@@ -1066,66 +1070,15 @@ func (a App) simulateReorgMempoolRecovery(args []string) int {
 		return 1
 	}
 
-	tx, err := chain.SendTransaction(fromWallet, args[1], amount, 0)
+	result, err := demo.RunReorgMempoolRecovery(a.cfg.DataDir, fromWallet, args[1], amount, advance)
 	if err != nil {
-		fmt.Fprintf(a.stderr, "queue tx for reorg demo: %v\n", err)
-		return 1
-	}
-	block, _, err := chain.MineMempool(args[0])
-	if err != nil {
-		fmt.Fprintf(a.stderr, "mine tx before reorg: %v\n", err)
+		fmt.Fprintf(a.stderr, "simulate reorg: %v\n", err)
 		return 1
 	}
 
-	blocks, err := chain.Blocks()
-	if err != nil {
-		fmt.Fprintf(a.stderr, "read chain: %v\n", err)
-		return 1
-	}
-	genesis := blocks[len(blocks)-1]
-	current, err := chain.CurrentBlock()
-	if err != nil {
-		fmt.Fprintf(a.stderr, "current block: %v\n", err)
-		return 1
-	}
-
-	targetHeight := current.Height + advance
-	prevHash := append([]byte(nil), genesis.Hash...)
-	for height := 1; height <= targetHeight; height++ {
-		forkBlock := blockchain.NewBlock(
-			[]blockchain.Transaction{blockchain.NewCoinbaseTransaction(args[0], fmt.Sprintf("reorg fork height %d", height))},
-			prevHash,
-			height,
-		)
-		if err := chain.ImportBlock(forkBlock); err != nil {
-			fmt.Fprintf(a.stderr, "import reorg block height=%d: %v\n", height, err)
-			return 1
-		}
-		prevHash = append([]byte(nil), forkBlock.Hash...)
-	}
-
-	pending, err := chain.PendingTransactions()
-	if err != nil {
-		fmt.Fprintf(a.stderr, "pending transactions after reorg: %v\n", err)
-		return 1
-	}
-	restored := false
-	for _, candidate := range pending {
-		if candidate.IDHex() == tx.IDHex() {
-			restored = true
-			break
-		}
-	}
-
-	balance, err := chain.BalanceOf(args[1])
-	if err != nil {
-		fmt.Fprintf(a.stderr, "balance after reorg: %v\n", err)
-		return 1
-	}
-
-	fmt.Fprintf(a.stdout, "mined_block=%s height=%d\n", block.HashHex(), block.Height)
-	fmt.Fprintf(a.stdout, "reorg_tx=%s restored=%t mempool_size=%d\n", tx.IDHex(), restored, len(pending))
-	fmt.Fprintf(a.stdout, "balance_after_reorg[%s]=%d\n", args[1], balance)
+	fmt.Fprintf(a.stdout, "mined_block=%s height=%d\n", result.MinedBlockHash, result.MinedBlockHeight)
+	fmt.Fprintf(a.stdout, "reorg_tx=%s restored=%t mempool_size=%d\n", result.ReorgTxID, result.Restored, result.MempoolSize)
+	fmt.Fprintf(a.stdout, "balance_after_reorg[%s]=%d\n", args[1], result.BalanceAfterReorg)
 	return 0
 }
 

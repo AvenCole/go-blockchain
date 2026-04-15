@@ -23,7 +23,7 @@ function ConsolePage({ command, setCommand, history, onExecute }: ConsolePagePro
               label="Command"
               value={command}
               onChange={(e) => setCommand(e.target.value)}
-              placeholder="例如: runnetdemo / nodeinit <node> / nodesend <node> <from> <to> 10 1"
+              placeholder="例如: runnetdemo / runreorgdemo / nodeinit <node> / nodesend <node> <from> <to> 10 1"
             />
             <Button variant="contained" onClick={onExecute}>
               执行
@@ -48,7 +48,7 @@ function ConsolePage({ command, setCommand, history, onExecute }: ConsolePagePro
         <Stack spacing={2}>
           {history.length === 0 ? (
             <Typography sx={{ color: '#8adf8a' }}>
-              尚无命令输出。可以先尝试：runnetdemo 或 nodes
+              尚无命令输出。可以先尝试：runnetdemo、runreorgdemo 或 nodes
             </Typography>
           ) : (
             history.map((item, index) => (

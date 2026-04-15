@@ -94,15 +94,16 @@ type CommandResult struct {
 }
 
 type NodeStatus struct {
-	Address      string          `json:"address"`
-	MinerAddress string          `json:"minerAddress"`
-	Peers        []string        `json:"peers"`
-	Initialized  bool            `json:"initialized"`
-	Height       int             `json:"height"`
-	MempoolCount int             `json:"mempoolCount"`
-	Running      bool            `json:"running"`
-	OrphanCount  int             `json:"orphanCount"`
-	RecentEvents []NodeEventView `json:"recentEvents"`
+	Address      string           `json:"address"`
+	MinerAddress string           `json:"minerAddress"`
+	Peers        []string         `json:"peers"`
+	Initialized  bool             `json:"initialized"`
+	Height       int              `json:"height"`
+	MempoolCount int              `json:"mempoolCount"`
+	Running      bool             `json:"running"`
+	OrphanCount  int              `json:"orphanCount"`
+	LastReorg    *ReorgStatusView `json:"lastReorg,omitempty"`
+	RecentEvents []NodeEventView  `json:"recentEvents"`
 }
 
 type NodeEventView struct {
@@ -120,4 +121,19 @@ type NetworkDemoResult struct {
 	BlockHash       string `json:"blockHash"`
 	PeerHeight      int    `json:"peerHeight"`
 	TipAnnounced    bool   `json:"tipAnnounced"`
+}
+
+type NetworkReorgDemoResult struct {
+	SourceNode          string `json:"sourceNode"`
+	PeerNode            string `json:"peerNode"`
+	MinerAddress        string `json:"minerAddress"`
+	ReceiverAddress     string `json:"receiverAddress"`
+	OriginalBlockHash   string `json:"originalBlockHash"`
+	OriginalBlockHeight int    `json:"originalBlockHeight"`
+	ReorgTxID           string `json:"reorgTxID"`
+	Restored            bool   `json:"restored"`
+	SourceOldHeight     int    `json:"sourceOldHeight"`
+	SourceNewHeight     int    `json:"sourceNewHeight"`
+	PeerHeight          int    `json:"peerHeight"`
+	PeerReorged         bool   `json:"peerReorged"`
 }

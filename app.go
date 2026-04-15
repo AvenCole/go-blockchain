@@ -99,3 +99,7 @@ func (a *App) MineNodePending(address string) (string, error) {
 func (a *App) RunNetworkQuickDemo() (gui.NetworkDemoResult, error) {
 	return a.service.RunNetworkQuickDemo()
 }
+
+func (a *App) RunNetworkReorgDemo() (gui.NetworkReorgDemoResult, error) {
+	return a.service.RunNetworkReorgDemo()
+}

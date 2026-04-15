@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"go-blockchain/internal/blockchain"
 	"go-blockchain/internal/network"
 	"go-blockchain/internal/wallet"
 )
@@ -101,6 +102,7 @@ func (s *Service) Nodes() ([]NodeStatus, error) {
 	statuses := make([]NodeStatus, 0, len(s.nodes))
 	for _, session := range s.nodes {
 		snapshot, _ := session.node.ChainSnapshot()
+		lastReorgStatus, _ := session.node.LastReorgStatus()
 		events := session.node.RecentEvents()
 		eventViews := make([]NodeEventView, 0, len(events))
 		for _, event := range events {
@@ -119,6 +121,7 @@ func (s *Service) Nodes() ([]NodeStatus, error) {
 			MempoolCount: snapshot.MempoolCount,
 			Running:      true,
 			OrphanCount:  session.node.OrphanCount(),
+			LastReorg:    toReorgStatusView(lastReorgStatus),
 			RecentEvents: eventViews,
 		})
 	}
@@ -126,6 +129,21 @@ func (s *Service) Nodes() ([]NodeStatus, error) {
 		return statuses[i].Address < statuses[j].Address
 	})
 	return statuses, nil
+}
+
+func toReorgStatusView(status *blockchain.ReorgStatus) *ReorgStatusView {
+	if status == nil {
+		return nil
+	}
+	return &ReorgStatusView{
+		Timestamp:             status.Timestamp,
+		OldHeight:             status.OldHeight,
+		NewHeight:             status.NewHeight,
+		OldTip:                status.OldTip,
+		NewTip:                status.NewTip,
+		RestoredTxCount:       status.RestoredTxCount,
+		DroppedConfirmedCount: status.DroppedConfirmedCount,
+	}
 }
 
 func (s *Service) ConnectNode(address, seed string) error {

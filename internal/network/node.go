@@ -204,6 +204,28 @@ func (n *Node) ChainSnapshot() (ChainSnapshot, error) {
 	return snapshot, nil
 }
 
+// LastReorgStatus returns the last recorded reorg status for one node chain.
+func (n *Node) LastReorgStatus() (*blockchain.ReorgStatus, error) {
+	n.chainMu.Lock()
+	defer n.chainMu.Unlock()
+
+	exists, err := blockchain.ChainExists(n.DataDir)
+	if err != nil {
+		return nil, err
+	}
+	if !exists {
+		return nil, nil
+	}
+
+	bc, err := blockchain.OpenBlockchain(n.DataDir)
+	if err != nil {
+		return nil, err
+	}
+	defer bc.Close()
+
+	return bc.LastReorgStatus()
+}
+
 // SubmitTransaction creates one local transaction and broadcasts it.
 func (n *Node) SubmitTransaction(from *wallet.Wallet, to string, amount int, fee int) (blockchain.Transaction, error) {
 	n.chainMu.Lock()

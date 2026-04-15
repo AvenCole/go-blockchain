@@ -66,6 +66,10 @@ export function RunNetworkQuickDemo() {
   return window['go']['main']['App']['RunNetworkQuickDemo']();
 }
 
+export function RunNetworkReorgDemo() {
+  return window['go']['main']['App']['RunNetworkReorgDemo']();
+}
+
 export function StartNode(arg1, arg2, arg3) {
   return window['go']['main']['App']['StartNode'](arg1, arg2, arg3);
 }

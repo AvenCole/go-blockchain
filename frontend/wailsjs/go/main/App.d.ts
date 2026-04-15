@@ -34,6 +34,8 @@ export function QueueTransaction(arg1:string,arg2:string,arg3:number,arg4:number
 
 export function RunNetworkQuickDemo():Promise<gui.NetworkDemoResult>;
 
+export function RunNetworkReorgDemo():Promise<gui.NetworkReorgDemoResult>;
+
 export function StartNode(arg1:string,arg2:string,arg3:string):Promise<string>;
 
 export function StopNode(arg1:string):Promise<void>;

@@ -425,3 +425,71 @@ func TestConsoleRunNetworkDemoCommand(t *testing.T) {
 		t.Fatalf("runnetdemo stdout = %q, want ready message", result.Stdout)
 	}
 }
+
+func TestRunNetworkReorgDemo(t *testing.T) {
+	t.Setenv(guiDataDirEnv, t.TempDir())
+
+	service := NewService()
+	result, err := service.RunNetworkReorgDemo()
+	if err != nil {
+		t.Fatalf("RunNetworkReorgDemo() error = %v", err)
+	}
+	t.Cleanup(func() {
+		nodes, _ := service.Nodes()
+		for _, node := range nodes {
+			_ = service.StopNode(node.Address)
+		}
+	})
+
+	if result.SourceNode == "" || result.PeerNode == "" {
+		t.Fatalf("RunNetworkReorgDemo() returned empty node addresses: %+v", result)
+	}
+	if result.OriginalBlockHash == "" || result.ReorgTxID == "" {
+		t.Fatalf("RunNetworkReorgDemo() returned empty reorg data: %+v", result)
+	}
+	if !result.Restored {
+		t.Fatalf("RunNetworkReorgDemo().Restored = false, want true")
+	}
+	if !result.PeerReorged {
+		t.Fatalf("RunNetworkReorgDemo().PeerReorged = false, want true")
+	}
+	if result.SourceNewHeight <= result.SourceOldHeight {
+		t.Fatalf("RunNetworkReorgDemo() heights = %d -> %d, want growth", result.SourceOldHeight, result.SourceNewHeight)
+	}
+	if result.PeerHeight < result.SourceNewHeight {
+		t.Fatalf("RunNetworkReorgDemo().PeerHeight = %d, want >= %d", result.PeerHeight, result.SourceNewHeight)
+	}
+
+	nodes, err := service.Nodes()
+	if err != nil {
+		t.Fatalf("Nodes() after reorg demo error = %v", err)
+	}
+	if len(nodes) != 2 {
+		t.Fatalf("len(nodes) after reorg demo = %d, want 2", len(nodes))
+	}
+	for _, node := range nodes {
+		if node.LastReorg == nil {
+			t.Fatalf("node %s LastReorg = nil, want value", node.Address)
+		}
+	}
+}
+
+func TestConsoleRunNetworkReorgDemoCommand(t *testing.T) {
+	t.Setenv(guiDataDirEnv, t.TempDir())
+
+	service := NewService()
+	result, err := service.ExecuteCLI("runreorgdemo")
+	if err != nil {
+		t.Fatalf("ExecuteCLI(runreorgdemo) error = %v", err)
+	}
+	nodes, err := service.Nodes()
+	if err != nil {
+		t.Fatalf("Nodes() after runreorgdemo error = %v", err)
+	}
+	for _, node := range nodes {
+		_ = service.StopNode(node.Address)
+	}
+	if !strings.Contains(result.Stdout, "network reorg demo ready") {
+		t.Fatalf("runreorgdemo stdout = %q, want ready message", result.Stdout)
+	}
+}

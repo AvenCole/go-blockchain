@@ -35,6 +35,8 @@ func (s *Service) ExecuteCLI(commandLine string) (CommandResult, error) {
 		return s.executeNodeMineFromConsole(args)
 	case "runnetdemo":
 		return s.executeRunNetworkDemoFromConsole(args)
+	case "runreorgdemo":
+		return s.executeRunNetworkReorgDemoFromConsole(args)
 	case "nodes":
 		return s.executeNodesFromConsole(args)
 	}
@@ -199,6 +201,37 @@ func (s *Service) executeRunNetworkDemoFromConsole(args []string) (CommandResult
 			result.BlockHash,
 			result.PeerHeight,
 			result.TipAnnounced,
+		),
+		ExitCode: 0,
+	}, nil
+}
+
+func (s *Service) executeRunNetworkReorgDemoFromConsole(args []string) (CommandResult, error) {
+	if len(args) != 1 {
+		return CommandResult{}, fmt.Errorf("runreorgdemo does not accept extra arguments")
+	}
+
+	result, err := s.RunNetworkReorgDemo()
+	if err != nil {
+		return CommandResult{}, err
+	}
+
+	return CommandResult{
+		Command: strings.Join(args, " "),
+		Stdout: fmt.Sprintf(
+			"network reorg demo ready\nsource=%s\npeer=%s\nminer=%s\nreceiver=%s\noriginalBlock=%s\noriginalHeight=%d\nreorgTx=%s\nrestored=%t\nsourceHeight=%d->%d\npeerHeight=%d\npeerReorged=%t\n",
+			result.SourceNode,
+			result.PeerNode,
+			result.MinerAddress,
+			result.ReceiverAddress,
+			result.OriginalBlockHash,
+			result.OriginalBlockHeight,
+			result.ReorgTxID,
+			result.Restored,
+			result.SourceOldHeight,
+			result.SourceNewHeight,
+			result.PeerHeight,
+			result.PeerReorged,
 		),
 		ExitCode: 0,
 	}, nil

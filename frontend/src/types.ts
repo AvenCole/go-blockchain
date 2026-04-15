@@ -100,6 +100,7 @@ export type NodeStatus = {
   mempoolCount: number
   running: boolean
   orphanCount: number
+  lastReorg?: ReorgStatusView | null
   recentEvents: NodeEventView[]
 }
 
@@ -118,4 +119,19 @@ export type NetworkDemoResult = {
   blockHash: string
   peerHeight: number
   tipAnnounced: boolean
+}
+
+export type NetworkReorgDemoResult = {
+  sourceNode: string
+  peerNode: string
+  minerAddress: string
+  receiverAddress: string
+  originalBlockHash: string
+  originalBlockHeight: number
+  reorgTxID: string
+  restored: boolean
+  sourceOldHeight: number
+  sourceNewHeight: number
+  peerHeight: number
+  peerReorged: boolean
 }
