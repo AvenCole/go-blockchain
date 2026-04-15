@@ -1,17 +1,15 @@
+import { useEffect, useMemo, useState } from 'react'
 import {
   Button,
   Card,
   CardContent,
-  Chip,
-  Divider,
-  List,
-  ListItem,
-  ListItemText,
   MenuItem,
   Stack,
   TextField,
   Typography,
 } from '@mui/material'
+import FocusedNodeCard from '../components/network/FocusedNodeCard'
+import NodeDirectoryCard from '../components/network/NodeDirectoryCard'
 import NetworkTimelineCard from '../components/network/NetworkTimelineCard'
 import NetworkTopologyCard from '../components/network/NetworkTopologyCard'
 import type {
@@ -75,6 +73,39 @@ function NetworkPage({
   onRunNetworkReorgDemo,
   onRunNetworkPartitionDemo,
 }: NetworkPageProps) {
+  const [focusedNodeAddress, setFocusedNodeAddress] = useState('')
+
+  useEffect(() => {
+    if (nodes.length === 0) {
+      if (focusedNodeAddress) {
+        setFocusedNodeAddress('')
+      }
+      return
+    }
+
+    if (
+      focusedNodeAddress &&
+      nodes.some((node) => node.address === focusedNodeAddress)
+    ) {
+      return
+    }
+
+    const nextFocusedAddress =
+      nodeControlForm.address &&
+      nodes.some((node) => node.address === nodeControlForm.address)
+        ? nodeControlForm.address
+        : nodes[0].address
+
+    if (nextFocusedAddress !== focusedNodeAddress) {
+      setFocusedNodeAddress(nextFocusedAddress)
+    }
+  }, [focusedNodeAddress, nodeControlForm.address, nodes])
+
+  const focusedNode = useMemo(
+    () => nodes.find((node) => node.address === focusedNodeAddress) ?? null,
+    [focusedNodeAddress, nodes],
+  )
+
   return (
     <Stack spacing={2.5}>
       <Stack direction={{ xs: 'column', xl: 'row' }} spacing={2.5}>
@@ -164,10 +195,40 @@ function NetworkPage({
 
       <Stack direction={{ xs: 'column', xl: 'row' }} spacing={2.5}>
         <Stack sx={{ flex: 1, minWidth: 0 }}>
-          <NetworkTopologyCard nodes={nodes} />
+          <NetworkTopologyCard
+            nodes={nodes}
+            selectedNodeAddress={focusedNodeAddress}
+            onSelectNode={setFocusedNodeAddress}
+          />
         </Stack>
         <Stack sx={{ flex: 1, minWidth: 0 }}>
           <NetworkTimelineCard nodes={nodes} recentEvents={recentEvents} />
+        </Stack>
+      </Stack>
+
+      <Stack direction={{ xs: 'column', xl: 'row' }} spacing={2.5}>
+        <Stack sx={{ flex: 0.9, minWidth: 0 }}>
+          <NodeDirectoryCard
+            nodes={nodes}
+            selectedNodeAddress={focusedNodeAddress}
+            onSelectNode={setFocusedNodeAddress}
+          />
+        </Stack>
+        <Stack sx={{ flex: 1.1, minWidth: 0 }}>
+          <FocusedNodeCard
+            node={focusedNode}
+            onUseAsConnectNode={(address) =>
+              setConnectForm((prev) => ({ ...prev, address }))
+            }
+            onUseAsSeed={(address) => {
+              setConnectForm((prev) => ({ ...prev, seed: address }))
+              setNodeForm((prev) => ({ ...prev, seed: address }))
+            }}
+            onUseAsControlNode={(address) =>
+              setNodeControlForm((prev) => ({ ...prev, address }))
+            }
+            onStopNode={onStopNode}
+          />
         </Stack>
       </Stack>
 
@@ -388,97 +449,6 @@ function NetworkPage({
         </CardContent>
       </Card>
 
-      <Card variant="outlined">
-        <CardContent sx={{ p: 2 }}>
-          <Stack
-            direction={{ xs: 'column', md: 'row' }}
-            spacing={1.5}
-            sx={{ justifyContent: 'space-between', alignItems: { xs: 'flex-start', md: 'center' } }}
-          >
-            <div>
-              <Typography variant="h6">节点状态</Typography>
-              <Typography color="text.secondary" sx={{ mt: 0.5 }}>
-                展示当前由 GUI 托管的节点、区块高度、矿工配置与已知 Peer。
-              </Typography>
-            </div>
-            <Chip label={`GUI 节点数 ${nodes.length}`} variant="outlined" color="primary" />
-          </Stack>
-
-          <List sx={{ mt: 2 }}>
-            {nodes.length === 0 ? (
-              <ListItem>
-                <ListItemText primary="当前还没有运行中的 GUI 节点" secondary="可先使用上方表单启动一个本地节点。" />
-              </ListItem>
-            ) : (
-              nodes.map((node) => (
-                <ListItem
-                  key={node.address}
-                  divider
-                  alignItems="flex-start"
-                  secondaryAction={
-                    <Button color="error" onClick={() => void onStopNode(node.address)}>
-                      停止
-                    </Button>
-                  }
-                  sx={{ pr: 12 }}
-                >
-                  <ListItemText
-                    primary={`${node.address}  (${node.initialized ? `height=${node.height}` : '未初始化'})`}
-                    secondary={
-                      <Stack spacing={0.75} sx={{ mt: 1, alignItems: 'flex-start' }}>
-                        <Typography variant="body2">miner={node.minerAddress || '(none)'}</Typography>
-                        <Typography variant="body2">initialized={String(node.initialized)}</Typography>
-                        <Typography variant="body2">mempool={node.mempoolCount}</Typography>
-                        <Typography variant="body2">running={String(node.running)}</Typography>
-                        <Typography variant="body2">height={node.initialized ? node.height : '未初始化'}</Typography>
-                        <Typography variant="body2" sx={{ wordBreak: 'break-all' }}>
-                          tip={node.tipHash || '(none)'}
-                        </Typography>
-                        <Typography variant="body2">orphans={node.orphanCount}</Typography>
-                        {node.lastReorg ? (
-                          <>
-                            <Divider />
-                            <Typography variant="body2">last reorg:</Typography>
-                            <Typography variant="body2" color="text.secondary">
-                              {node.lastReorg.oldHeight} → {node.lastReorg.newHeight} · restored={node.lastReorg.restoredTxCount}
-                            </Typography>
-                          </>
-                        ) : null}
-                        <Divider />
-                        <Typography variant="body2">recent events:</Typography>
-                        {(node.recentEvents ?? []).length === 0 ? (
-                          <Typography variant="body2" color="text.secondary">
-                            暂无网络事件
-                          </Typography>
-                        ) : (
-                          (node.recentEvents ?? []).slice(0, 4).map((event, idx) => (
-                            <Typography key={`${node.address}-event-${idx}`} variant="body2" color="text.secondary">
-                              {event.timestamp} · {event.kind} · {event.detail}
-                            </Typography>
-                          ))
-                        )}
-                        <Divider />
-                        <Typography variant="body2">peers:</Typography>
-                        {node.peers.length === 0 ? (
-                          <Typography variant="body2" color="text.secondary">
-                            暂无 peer
-                          </Typography>
-                        ) : (
-                          node.peers.map((peer) => (
-                            <Typography key={`${node.address}-${peer}`} variant="body2" color="text.secondary">
-                              {peer}
-                            </Typography>
-                          ))
-                        )}
-                      </Stack>
-                    }
-                  />
-                </ListItem>
-              ))
-            )}
-          </List>
-        </CardContent>
-      </Card>
     </Stack>
   )
 }

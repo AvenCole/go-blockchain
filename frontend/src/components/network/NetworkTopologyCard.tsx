@@ -4,9 +4,15 @@ import { buildTopology, shortAddress } from '../../utils/networkView'
 
 type NetworkTopologyCardProps = {
   nodes: NodeStatus[]
+  selectedNodeAddress?: string
+  onSelectNode?: (address: string) => void
 }
 
-function NetworkTopologyCard({ nodes }: NetworkTopologyCardProps) {
+function NetworkTopologyCard({
+  nodes,
+  selectedNodeAddress = '',
+  onSelectNode,
+}: NetworkTopologyCardProps) {
   const topology = buildTopology(nodes)
 
   return (
@@ -48,11 +54,28 @@ function NetworkTopologyCard({ nodes }: NetworkTopologyCardProps) {
               }}
             >
               {topology.nodes.map((node) => (
-                <Paper key={node.address} variant="outlined" sx={{ p: 1.5 }}>
+                <Paper
+                  key={node.address}
+                  variant="outlined"
+                  onClick={onSelectNode ? () => onSelectNode(node.address) : undefined}
+                  sx={{
+                    p: 1.5,
+                    cursor: onSelectNode ? 'pointer' : 'default',
+                    borderColor:
+                      node.address === selectedNodeAddress ? 'primary.main' : 'divider',
+                    bgcolor:
+                      node.address === selectedNodeAddress
+                        ? 'action.selected'
+                        : 'background.paper',
+                  }}
+                >
                   <Stack spacing={1}>
                     <Stack direction="row" spacing={1} sx={{ alignItems: 'center', justifyContent: 'space-between' }}>
                       <Typography variant="subtitle2">{node.shortAddress}</Typography>
                       <Stack direction="row" spacing={0.75}>
+                        {node.address === selectedNodeAddress ? (
+                          <Chip size="small" label="焦点" color="primary" variant="outlined" />
+                        ) : null}
                         {node.isMiner ? <Chip size="small" label="Miner" color="secondary" variant="outlined" /> : null}
                         {node.hasReorg ? <Chip size="small" label="Reorg" color="warning" variant="outlined" /> : null}
                       </Stack>
