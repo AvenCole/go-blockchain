@@ -17,6 +17,7 @@ import {
   StartNode,
   StopNode,
   SubmitNodeTransaction,
+  RunNetworkPartitionDemo,
   RunNetworkQuickDemo,
   RunNetworkReorgDemo,
   Wallets,
@@ -27,6 +28,7 @@ import type {
   DashboardData,
   MultiSigOutputView,
   NetworkDemoResult,
+  NetworkPartitionDemoResult,
   NetworkReorgDemoResult,
   NodeStatus,
   WalletView,
@@ -75,3 +77,4 @@ export const submitNodeTransaction = (
 export const mineNodePending = (address: string): Promise<string> => MineNodePending(address)
 export const runNetworkQuickDemo = (): Promise<NetworkDemoResult> => RunNetworkQuickDemo()
 export const runNetworkReorgDemo = (): Promise<NetworkReorgDemoResult> => RunNetworkReorgDemo()
+export const runNetworkPartitionDemo = (): Promise<NetworkPartitionDemoResult> => RunNetworkPartitionDemo()

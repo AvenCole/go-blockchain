@@ -39,6 +39,7 @@ type NodeEvent struct {
 type ChainSnapshot struct {
 	Initialized  bool
 	Height       int
+	TipHash      string
 	MempoolCount int
 }
 
@@ -193,6 +194,10 @@ func (n *Node) ChainSnapshot() (ChainSnapshot, error) {
 	if err != nil {
 		return snapshot, err
 	}
+	current, err := bc.CurrentBlock()
+	if err != nil {
+		return snapshot, err
+	}
 	mempoolCount, err := bc.MempoolSize()
 	if err != nil {
 		return snapshot, err
@@ -200,6 +205,7 @@ func (n *Node) ChainSnapshot() (ChainSnapshot, error) {
 
 	snapshot.Initialized = true
 	snapshot.Height = height
+	snapshot.TipHash = current.HashHex()
 	snapshot.MempoolCount = mempoolCount
 	return snapshot, nil
 }

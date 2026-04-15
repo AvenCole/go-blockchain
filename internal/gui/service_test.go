@@ -493,3 +493,71 @@ func TestConsoleRunNetworkReorgDemoCommand(t *testing.T) {
 		t.Fatalf("runreorgdemo stdout = %q, want ready message", result.Stdout)
 	}
 }
+
+func TestRunNetworkPartitionDemo(t *testing.T) {
+	t.Setenv(guiDataDirEnv, t.TempDir())
+
+	service := NewService()
+	result, err := service.RunNetworkPartitionDemo()
+	if err != nil {
+		t.Fatalf("RunNetworkPartitionDemo() error = %v", err)
+	}
+	t.Cleanup(func() {
+		nodes, _ := service.Nodes()
+		for _, node := range nodes {
+			_ = service.StopNode(node.Address)
+		}
+	})
+
+	if result.SourceNode == "" || result.PeerNode == "" || result.ForkNode == "" {
+		t.Fatalf("RunNetworkPartitionDemo() returned empty node addresses: %+v", result)
+	}
+	if result.ConfirmedTxID == "" || result.FinalTipHash == "" {
+		t.Fatalf("RunNetworkPartitionDemo() returned empty tx or tip: %+v", result)
+	}
+	if result.ForkHeight <= result.OldConfirmedHeight {
+		t.Fatalf("RunNetworkPartitionDemo() heights = old %d fork %d, want fork longer", result.OldConfirmedHeight, result.ForkHeight)
+	}
+	if !result.Restored {
+		t.Fatalf("RunNetworkPartitionDemo().Restored = false, want true")
+	}
+	if !result.AllConverged {
+		t.Fatalf("RunNetworkPartitionDemo().AllConverged = false, want true")
+	}
+
+	nodes, err := service.Nodes()
+	if err != nil {
+		t.Fatalf("Nodes() after partition demo error = %v", err)
+	}
+	if len(nodes) != 3 {
+		t.Fatalf("len(nodes) after partition demo = %d, want 3", len(nodes))
+	}
+	for _, node := range nodes {
+		if node.TipHash != result.FinalTipHash {
+			t.Fatalf("node %s tip = %q, want %q", node.Address, node.TipHash, result.FinalTipHash)
+		}
+		if node.Height < result.ForkHeight {
+			t.Fatalf("node %s height = %d, want >= %d", node.Address, node.Height, result.ForkHeight)
+		}
+	}
+}
+
+func TestConsoleRunNetworkPartitionDemoCommand(t *testing.T) {
+	t.Setenv(guiDataDirEnv, t.TempDir())
+
+	service := NewService()
+	result, err := service.ExecuteCLI("runpartitiondemo")
+	if err != nil {
+		t.Fatalf("ExecuteCLI(runpartitiondemo) error = %v", err)
+	}
+	nodes, err := service.Nodes()
+	if err != nil {
+		t.Fatalf("Nodes() after runpartitiondemo error = %v", err)
+	}
+	for _, node := range nodes {
+		_ = service.StopNode(node.Address)
+	}
+	if !strings.Contains(result.Stdout, "network partition demo ready") {
+		t.Fatalf("runpartitiondemo stdout = %q, want ready message", result.Stdout)
+	}
+}

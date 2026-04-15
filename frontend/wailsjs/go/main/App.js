@@ -62,6 +62,10 @@ export function QueueTransaction(arg1, arg2, arg3, arg4) {
   return window['go']['main']['App']['QueueTransaction'](arg1, arg2, arg3, arg4);
 }
 
+export function RunNetworkPartitionDemo() {
+  return window['go']['main']['App']['RunNetworkPartitionDemo']();
+}
+
 export function RunNetworkQuickDemo() {
   return window['go']['main']['App']['RunNetworkQuickDemo']();
 }

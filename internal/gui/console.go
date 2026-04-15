@@ -37,6 +37,8 @@ func (s *Service) ExecuteCLI(commandLine string) (CommandResult, error) {
 		return s.executeRunNetworkDemoFromConsole(args)
 	case "runreorgdemo":
 		return s.executeRunNetworkReorgDemoFromConsole(args)
+	case "runpartitiondemo":
+		return s.executeRunNetworkPartitionDemoFromConsole(args)
 	case "nodes":
 		return s.executeNodesFromConsole(args)
 	}
@@ -258,10 +260,11 @@ func (s *Service) executeNodesFromConsole(args []string) (CommandResult, error) 
 	for _, node := range nodes {
 		fmt.Fprintf(
 			&stdout,
-			"address=%s initialized=%t height=%d mempool=%d miner=%s peers=%s\n",
+			"address=%s initialized=%t height=%d tip=%s mempool=%d miner=%s peers=%s\n",
 			node.Address,
 			node.Initialized,
 			node.Height,
+			fallbackText(node.TipHash, "(none)"),
 			node.MempoolCount,
 			fallbackText(node.MinerAddress, "(none)"),
 			strings.Join(node.Peers, ","),
@@ -271,6 +274,36 @@ func (s *Service) executeNodesFromConsole(args []string) (CommandResult, error) 
 	return CommandResult{
 		Command:  strings.Join(args, " "),
 		Stdout:   stdout.String(),
+		ExitCode: 0,
+	}, nil
+}
+
+func (s *Service) executeRunNetworkPartitionDemoFromConsole(args []string) (CommandResult, error) {
+	if len(args) != 1 {
+		return CommandResult{}, fmt.Errorf("runpartitiondemo does not accept extra arguments")
+	}
+
+	result, err := s.RunNetworkPartitionDemo()
+	if err != nil {
+		return CommandResult{}, err
+	}
+
+	return CommandResult{
+		Command: strings.Join(args, " "),
+		Stdout: fmt.Sprintf(
+			"network partition demo ready\nsource=%s\npeer=%s\nfork=%s\nminer=%s\nreceiver=%s\nconfirmedTx=%s\noldConfirmedHeight=%d\nforkHeight=%d\nfinalTip=%s\nrestored=%t\nallConverged=%t\n",
+			result.SourceNode,
+			result.PeerNode,
+			result.ForkNode,
+			result.MinerAddress,
+			result.ReceiverAddress,
+			result.ConfirmedTxID,
+			result.OldConfirmedHeight,
+			result.ForkHeight,
+			result.FinalTipHash,
+			result.Restored,
+			result.AllConverged,
+		),
 		ExitCode: 0,
 	}, nil
 }

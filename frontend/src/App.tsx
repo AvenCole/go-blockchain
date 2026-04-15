@@ -53,6 +53,7 @@ import {
   queueP2PKTransaction,
   queueSpendMultiSigTransaction,
   queueTransaction,
+  runNetworkPartitionDemo,
   runNetworkQuickDemo,
   runNetworkReorgDemo,
   startNode,
@@ -65,6 +66,7 @@ import type {
   DashboardData,
   MultiSigOutputView,
   NetworkDemoResult,
+  NetworkPartitionDemoResult,
   NetworkReorgDemoResult,
   NodeStatus,
   WalletView,
@@ -99,6 +101,7 @@ function App() {
   const [error, setError] = useState('')
   const [networkDemo, setNetworkDemo] = useState<NetworkDemoResult | null>(null)
   const [networkReorgDemo, setNetworkReorgDemo] = useState<NetworkReorgDemoResult | null>(null)
+  const [networkPartitionDemo, setNetworkPartitionDemo] = useState<NetworkPartitionDemoResult | null>(null)
   const [txForm, setTxForm] = useState({
     template: 'p2pkh' as 'p2pkh' | 'p2pk' | 'multisig',
     from: '',
@@ -436,6 +439,18 @@ function App() {
     }
   }
 
+  const handleRunNetworkPartitionDemo = async () => {
+    try {
+      setError('')
+      const result = await runNetworkPartitionDemo()
+      setNetworkPartitionDemo(result)
+      setMessage(`三节点分区演示已完成：${result.sourceNode} / ${result.peerNode} / ${result.forkNode}`)
+      await refresh()
+    } catch (err) {
+      setError(String(err))
+    }
+  }
+
   const handleSpendMultiSig = async () => {
     try {
       setError('')
@@ -609,6 +624,7 @@ function App() {
                       wallets={wallets}
                       networkDemo={networkDemo}
                       networkReorgDemo={networkReorgDemo}
+                      networkPartitionDemo={networkPartitionDemo}
                       lastReorg={dashboard?.lastReorg ?? null}
                       recentEvents={dashboard?.recentEvents ?? []}
                       nodeForm={nodeForm}
@@ -625,6 +641,7 @@ function App() {
                       onMineNode={handleMineNode}
                       onRunNetworkQuickDemo={handleRunNetworkQuickDemo}
                       onRunNetworkReorgDemo={handleRunNetworkReorgDemo}
+                      onRunNetworkPartitionDemo={handleRunNetworkPartitionDemo}
                     />
                   </CardContent>
                 </Card>

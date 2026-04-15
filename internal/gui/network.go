@@ -34,6 +34,15 @@ func (s *Service) StartNode(address, seed, miner string) (string, error) {
 		return "", fmt.Errorf("无效矿工地址")
 	}
 
+	nodeKey := address
+	if strings.HasSuffix(address, ":0") {
+		nodeKey = address + "-" + strconv.FormatInt(time.Now().UnixNano(), 10)
+	}
+	nodeDir := filepath.Join(s.cfg.DataDir, "nodes", sanitizeNodeReplacer.Replace(nodeKey))
+	return s.startManagedNode(address, seed, miner, nodeDir)
+}
+
+func (s *Service) startManagedNode(address, seed, miner, nodeDir string) (string, error) {
 	s.nodeMu.Lock()
 	defer s.nodeMu.Unlock()
 	s.ensureNodeMap()
@@ -41,11 +50,6 @@ func (s *Service) StartNode(address, seed, miner string) (string, error) {
 		return address, fmt.Errorf("节点已存在")
 	}
 
-	nodeKey := address
-	if strings.HasSuffix(address, ":0") {
-		nodeKey = address + "-" + strconv.FormatInt(time.Now().UnixNano(), 10)
-	}
-	nodeDir := filepath.Join(s.cfg.DataDir, "nodes", sanitizeNodeReplacer.Replace(nodeKey))
 	node := network.NewNode(address, nodeDir, miner)
 	ctx, cancel := contextFromBackground()
 	errCh := make(chan error, 1)
@@ -118,6 +122,7 @@ func (s *Service) Nodes() ([]NodeStatus, error) {
 			Peers:        session.node.KnownPeers(),
 			Initialized:  snapshot.Initialized,
 			Height:       snapshot.Height,
+			TipHash:      snapshot.TipHash,
 			MempoolCount: snapshot.MempoolCount,
 			Running:      true,
 			OrphanCount:  session.node.OrphanCount(),

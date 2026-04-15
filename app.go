@@ -103,3 +103,7 @@ func (a *App) RunNetworkQuickDemo() (gui.NetworkDemoResult, error) {
 func (a *App) RunNetworkReorgDemo() (gui.NetworkReorgDemoResult, error) {
 	return a.service.RunNetworkReorgDemo()
 }
+
+func (a *App) RunNetworkPartitionDemo() (gui.NetworkPartitionDemoResult, error) {
+	return a.service.RunNetworkPartitionDemo()
+}

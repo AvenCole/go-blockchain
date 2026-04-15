@@ -99,6 +99,7 @@ type NodeStatus struct {
 	Peers        []string         `json:"peers"`
 	Initialized  bool             `json:"initialized"`
 	Height       int              `json:"height"`
+	TipHash      string           `json:"tipHash"`
 	MempoolCount int              `json:"mempoolCount"`
 	Running      bool             `json:"running"`
 	OrphanCount  int              `json:"orphanCount"`
@@ -136,4 +137,18 @@ type NetworkReorgDemoResult struct {
 	SourceNewHeight     int    `json:"sourceNewHeight"`
 	PeerHeight          int    `json:"peerHeight"`
 	PeerReorged         bool   `json:"peerReorged"`
+}
+
+type NetworkPartitionDemoResult struct {
+	SourceNode         string `json:"sourceNode"`
+	PeerNode           string `json:"peerNode"`
+	ForkNode           string `json:"forkNode"`
+	MinerAddress       string `json:"minerAddress"`
+	ReceiverAddress    string `json:"receiverAddress"`
+	ConfirmedTxID      string `json:"confirmedTxID"`
+	OldConfirmedHeight int    `json:"oldConfirmedHeight"`
+	ForkHeight         int    `json:"forkHeight"`
+	FinalTipHash       string `json:"finalTipHash"`
+	Restored           bool   `json:"restored"`
+	AllConverged       bool   `json:"allConverged"`
 }

@@ -97,6 +97,7 @@ export type NodeStatus = {
   peers: string[]
   initialized: boolean
   height: number
+  tipHash: string
   mempoolCount: number
   running: boolean
   orphanCount: number
@@ -134,4 +135,18 @@ export type NetworkReorgDemoResult = {
   sourceNewHeight: number
   peerHeight: number
   peerReorged: boolean
+}
+
+export type NetworkPartitionDemoResult = {
+  sourceNode: string
+  peerNode: string
+  forkNode: string
+  minerAddress: string
+  receiverAddress: string
+  confirmedTxID: string
+  oldConfirmedHeight: number
+  forkHeight: number
+  finalTipHash: string
+  restored: boolean
+  allConverged: boolean
 }

@@ -291,6 +291,38 @@ export namespace gui {
 	        this.tipAnnounced = source["tipAnnounced"];
 	    }
 	}
+	export class NetworkPartitionDemoResult {
+	    sourceNode: string;
+	    peerNode: string;
+	    forkNode: string;
+	    minerAddress: string;
+	    receiverAddress: string;
+	    confirmedTxID: string;
+	    oldConfirmedHeight: number;
+	    forkHeight: number;
+	    finalTipHash: string;
+	    restored: boolean;
+	    allConverged: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new NetworkPartitionDemoResult(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.sourceNode = source["sourceNode"];
+	        this.peerNode = source["peerNode"];
+	        this.forkNode = source["forkNode"];
+	        this.minerAddress = source["minerAddress"];
+	        this.receiverAddress = source["receiverAddress"];
+	        this.confirmedTxID = source["confirmedTxID"];
+	        this.oldConfirmedHeight = source["oldConfirmedHeight"];
+	        this.forkHeight = source["forkHeight"];
+	        this.finalTipHash = source["finalTipHash"];
+	        this.restored = source["restored"];
+	        this.allConverged = source["allConverged"];
+	    }
+	}
 	export class NetworkReorgDemoResult {
 	    sourceNode: string;
 	    peerNode: string;
@@ -347,6 +379,7 @@ export namespace gui {
 	    peers: string[];
 	    initialized: boolean;
 	    height: number;
+	    tipHash: string;
 	    mempoolCount: number;
 	    running: boolean;
 	    orphanCount: number;
@@ -364,6 +397,7 @@ export namespace gui {
 	        this.peers = source["peers"];
 	        this.initialized = source["initialized"];
 	        this.height = source["height"];
+	        this.tipHash = source["tipHash"];
 	        this.mempoolCount = source["mempoolCount"];
 	        this.running = source["running"];
 	        this.orphanCount = source["orphanCount"];

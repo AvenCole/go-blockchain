@@ -12,13 +12,22 @@ import {
   TextField,
   Typography,
 } from '@mui/material'
-import type { ChainEventView, NetworkDemoResult, NetworkReorgDemoResult, NodeStatus, ReorgStatusView, WalletView } from '../types'
+import type {
+  ChainEventView,
+  NetworkDemoResult,
+  NetworkPartitionDemoResult,
+  NetworkReorgDemoResult,
+  NodeStatus,
+  ReorgStatusView,
+  WalletView,
+} from '../types'
 
 type NetworkPageProps = {
   nodes: NodeStatus[]
   wallets: WalletView[]
   networkDemo?: NetworkDemoResult | null
   networkReorgDemo?: NetworkReorgDemoResult | null
+  networkPartitionDemo?: NetworkPartitionDemoResult | null
   lastReorg?: ReorgStatusView | null
   recentEvents?: ChainEventView[]
   nodeForm: { address: string; seed: string; miner: string }
@@ -37,6 +46,7 @@ type NetworkPageProps = {
   onMineNode: () => Promise<void>
   onRunNetworkQuickDemo: () => Promise<void>
   onRunNetworkReorgDemo: () => Promise<void>
+  onRunNetworkPartitionDemo: () => Promise<void>
 }
 
 function NetworkPage({
@@ -44,6 +54,7 @@ function NetworkPage({
   wallets,
   networkDemo,
   networkReorgDemo,
+  networkPartitionDemo,
   lastReorg,
   recentEvents = [],
   nodeForm,
@@ -60,6 +71,7 @@ function NetworkPage({
   onMineNode,
   onRunNetworkQuickDemo,
   onRunNetworkReorgDemo,
+  onRunNetworkPartitionDemo,
 }: NetworkPageProps) {
   return (
     <Stack spacing={2.5}>
@@ -112,6 +124,35 @@ function NetworkPage({
               ) : (
                 <Typography variant="body2" color="text.secondary">
                   适合答辩时直观展示“已确认交易如何因更长链被回滚并回到 mempool”。
+                </Typography>
+              )}
+            </Stack>
+          </CardContent>
+        </Card>
+
+        <Card variant="outlined" sx={{ flex: 1 }}>
+          <CardContent sx={{ p: 2 }}>
+            <Typography variant="h6">三节点分区 / 合流演示</Typography>
+            <Typography color="text.secondary" sx={{ mt: 1 }}>
+              先让 source 与 peer 形成已确认旧主链，再让隔离 fork 节点离线长出更长分叉，最后合流并观察三节点收敛到同一新 tip。
+            </Typography>
+            <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} sx={{ mt: 2.5, alignItems: { md: 'center' } }}>
+              <Button variant="contained" color="inherit" onClick={onRunNetworkPartitionDemo}>
+                运行三节点演示
+              </Button>
+              {networkPartitionDemo ? (
+                <Stack spacing={0.5}>
+                  <Typography variant="body2">
+                    nodes={networkPartitionDemo.sourceNode} / {networkPartitionDemo.peerNode} / {networkPartitionDemo.forkNode}
+                  </Typography>
+                  <Typography variant="body2">
+                    restored={String(networkPartitionDemo.restored)} · converged={String(networkPartitionDemo.allConverged)}
+                  </Typography>
+                  <Typography variant="body2">forkHeight={networkPartitionDemo.forkHeight}</Typography>
+                </Stack>
+              ) : (
+                <Typography variant="body2" color="text.secondary">
+                  适合答辩时展示“网络分区后合流，所有节点最终重新收敛到同一最长链”。
                 </Typography>
               )}
             </Stack>
@@ -379,6 +420,9 @@ function NetworkPage({
                         <Typography variant="body2">mempool={node.mempoolCount}</Typography>
                         <Typography variant="body2">running={String(node.running)}</Typography>
                         <Typography variant="body2">height={node.initialized ? node.height : '未初始化'}</Typography>
+                        <Typography variant="body2" sx={{ wordBreak: 'break-all' }}>
+                          tip={node.tipHash || '(none)'}
+                        </Typography>
                         <Typography variant="body2">orphans={node.orphanCount}</Typography>
                         {node.lastReorg ? (
                           <>
