@@ -12,7 +12,7 @@ function ConsolePage({ command, setCommand, history, onExecute }: ConsolePagePro
   return (
     <Stack spacing={2}>
       <Card variant="outlined">
-        <CardContent>
+        <CardContent sx={{ p: 2 }}>
           <Typography variant="h6">终端控制台</Typography>
           <Typography color="text.secondary" sx={{ mt: 1 }}>
             可直接输入 CLI 命令进行演示，适合答辩时展示终端链路。
@@ -23,7 +23,7 @@ function ConsolePage({ command, setCommand, history, onExecute }: ConsolePagePro
               label="Command"
               value={command}
               onChange={(e) => setCommand(e.target.value)}
-              placeholder="例如: createwallet / printchain / runperf 10"
+              placeholder="例如: runnetdemo / nodeinit <node> / nodesend <node> <from> <to> 10 1"
             />
             <Button variant="contained" onClick={onExecute}>
               执行
@@ -37,16 +37,18 @@ function ConsolePage({ command, setCommand, history, onExecute }: ConsolePagePro
         sx={{
           p: 2,
           minHeight: 420,
-          bgcolor: '#0b1020',
+          bgcolor: '#0f172a',
           color: '#d6f5d6',
           fontFamily: 'Consolas, monospace',
           overflow: 'auto',
+          borderRadius: 0.5,
+          borderColor: 'divider',
         }}
       >
         <Stack spacing={2}>
           {history.length === 0 ? (
             <Typography sx={{ color: '#8adf8a' }}>
-              尚无命令输出。可以先尝试：createwallet
+              尚无命令输出。可以先尝试：runnetdemo 或 nodes
             </Typography>
           ) : (
             history.map((item, index) => (

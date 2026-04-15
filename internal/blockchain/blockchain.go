@@ -4,11 +4,13 @@ import (
 	"bytes"
 	"crypto/ecdsa"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 	"sort"
+	"time"
 
 	"github.com/cockroachdb/pebble"
 
@@ -30,11 +32,48 @@ var (
 	ErrInvalidBlock = errors.New("invalid block")
 	// ErrDoubleSpend reports that one output is being spent twice.
 	ErrDoubleSpend = errors.New("double spend detected")
+	// ErrOrphanBlock reports that a block parent is unknown locally.
+	ErrOrphanBlock = errors.New("orphan block")
 )
 
 var lastHashKey = []byte("lh")
 var utxoPrefix = []byte("utxo-")
 var mempoolPrefix = []byte("mempool-")
+var reorgStatusKey = []byte("reorg-status")
+var chainEventLogKey = []byte("chain-events")
+
+const maxChainEvents = 10
+
+type ReorgStatus struct {
+	Timestamp             string `json:"timestamp"`
+	OldHeight             int    `json:"oldHeight"`
+	NewHeight             int    `json:"newHeight"`
+	OldTip                string `json:"oldTip"`
+	NewTip                string `json:"newTip"`
+	RestoredTxCount       int    `json:"restoredTxCount"`
+	DroppedConfirmedCount int    `json:"droppedConfirmedCount"`
+}
+
+type ChainEvent struct {
+	Timestamp             string `json:"timestamp"`
+	Kind                  string `json:"kind"`
+	Summary               string `json:"summary"`
+	OldHeight             int    `json:"oldHeight"`
+	NewHeight             int    `json:"newHeight"`
+	OldTip                string `json:"oldTip"`
+	NewTip                string `json:"newTip"`
+	RestoredTxCount       int    `json:"restoredTxCount"`
+	DroppedConfirmedCount int    `json:"droppedConfirmedCount"`
+}
+
+type MultiSigOutputInfo struct {
+	TxID         string
+	Out          int
+	Value        int
+	Required     int
+	Participants []string
+	ScriptPubKey string
+}
 
 // Blockchain provides chain storage and append operations.
 type Blockchain struct {
@@ -115,6 +154,16 @@ func CreateBlockchain(dataDir string, genesisAddress string) (*Blockchain, error
 		dataDir: dataDir,
 		tip:     genesis.Hash,
 		db:      db,
+	}
+	if err := bc.appendChainEvent(ChainEvent{
+		Timestamp: time.Now().UTC().Format(time.RFC3339),
+		Kind:      "genesis",
+		Summary:   fmt.Sprintf("genesis created height=0 tip=%s", genesis.HashHex()),
+		NewHeight: 0,
+		NewTip:    genesis.HashHex(),
+	}); err != nil {
+		_ = bc.Close()
+		return nil, err
 	}
 
 	return bc, nil
@@ -205,6 +254,15 @@ func (bc *Blockchain) commitBlock(transactions []Transaction, mutateBatch func(*
 	}
 
 	bc.tip = newBlock.Hash
+	if err := bc.appendChainEvent(ChainEvent{
+		Timestamp: time.Now().UTC().Format(time.RFC3339),
+		Kind:      "main_block",
+		Summary:   fmt.Sprintf("main block height=%d txs=%d tip=%s", newBlock.Height, len(newBlock.Transactions), newBlock.HashHex()),
+		NewHeight: newBlock.Height,
+		NewTip:    newBlock.HashHex(),
+	}); err != nil {
+		return nil, err
+	}
 
 	return newBlock, nil
 }
@@ -452,7 +510,21 @@ func (bc *Blockchain) ImportBlock(block *Block) error {
 	if block == nil {
 		return ErrInvalidBlock
 	}
-	if err := bc.ValidateBlock(block); err != nil {
+	if block.Height == 0 {
+		return ErrInvalidBlock
+	}
+
+	parent, err := bc.blockByHash(block.PrevBlockHash)
+	if err != nil {
+		if errors.Is(err, pebble.ErrNotFound) {
+			return ErrOrphanBlock
+		}
+		return err
+	}
+	if block.Height != parent.Height+1 {
+		return ErrInvalidBlock
+	}
+	if err := bc.validateBlockOnBranch(block, parent.Hash); err != nil {
 		return err
 	}
 
@@ -460,11 +532,14 @@ func (bc *Blockchain) ImportBlock(block *Block) error {
 	if err != nil {
 		return err
 	}
-	if block.Height <= current.Height {
+
+	if _, err := bc.blockByHash(block.Hash); err == nil {
+		if block.Height > current.Height {
+			return bc.switchTip(block.Hash)
+		}
 		return nil
-	}
-	if block.Height != current.Height+1 || !bytes.Equal(block.PrevBlockHash, bc.tip) {
-		return ErrInvalidBlock
+	} else if !errors.Is(err, pebble.ErrNotFound) {
+		return err
 	}
 
 	encodedBlock, err := block.Serialize()
@@ -477,19 +552,24 @@ func (bc *Blockchain) ImportBlock(block *Block) error {
 	if err := batch.Set(block.Hash, encodedBlock, nil); err != nil {
 		return err
 	}
-	if err := batch.Set(lastHashKey, block.Hash, nil); err != nil {
-		return err
-	}
-	if err := applyUTXOChanges(bc.db, batch, block); err != nil {
-		return err
-	}
-	if err := deleteMempoolTransactions(batch, block.Transactions); err != nil {
-		return err
-	}
 	if err := batch.Commit(pebble.Sync); err != nil {
 		return err
 	}
-	bc.tip = block.Hash
+
+	if block.Height > current.Height {
+		return bc.switchTip(block.Hash)
+	}
+
+	if err := bc.appendChainEvent(ChainEvent{
+		Timestamp: time.Now().UTC().Format(time.RFC3339),
+		Kind:      "fork_block",
+		Summary:   fmt.Sprintf("side branch block stored height=%d hash=%s", block.Height, block.HashHex()),
+		NewHeight: block.Height,
+		NewTip:    block.HashHex(),
+	}); err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -634,6 +714,56 @@ func (bc *Blockchain) FindUTXO(pubKeyHash []byte) ([]TXOutput, error) {
 	return utxos, nil
 }
 
+// SpendableMultiSigOutputs returns all currently unspent multisig outputs.
+func (bc *Blockchain) SpendableMultiSigOutputs() ([]MultiSigOutputInfo, error) {
+	iter, err := bc.db.NewIter(&pebble.IterOptions{
+		LowerBound: utxoPrefix,
+		UpperBound: prefixUpperBound(utxoPrefix),
+	})
+	if err != nil {
+		return nil, err
+	}
+	defer iter.Close()
+
+	outputs := make([]MultiSigOutputInfo, 0)
+	for iter.First(); iter.Valid(); iter.Next() {
+		txIDHex := hex.EncodeToString(iter.Key()[len(utxoPrefix):])
+		cached, err := decodeCachedUTXOs(iter.Value())
+		if err != nil {
+			return nil, err
+		}
+		for _, item := range cached {
+			required, pubKeys, ok := ExtractMultiSigPubKeys(item.Output.EffectiveScriptPubKey())
+			if !ok {
+				continue
+			}
+			participants := make([]string, 0, len(pubKeys))
+			for _, pubKey := range pubKeys {
+				participants = append(participants, wallet.AddressFromPubKey(pubKey))
+			}
+			outputs = append(outputs, MultiSigOutputInfo{
+				TxID:         txIDHex,
+				Out:          item.Index,
+				Value:        item.Output.Value,
+				Required:     required,
+				Participants: participants,
+				ScriptPubKey: item.Output.EffectiveScriptPubKey().String(),
+			})
+		}
+	}
+	if err := iter.Error(); err != nil {
+		return nil, err
+	}
+
+	sort.Slice(outputs, func(i, j int) bool {
+		if outputs[i].TxID == outputs[j].TxID {
+			return outputs[i].Out < outputs[j].Out
+		}
+		return outputs[i].TxID < outputs[j].TxID
+	})
+	return outputs, nil
+}
+
 // ReindexUTXO rebuilds the cached UTXO set from the full chain.
 func (bc *Blockchain) ReindexUTXO() error {
 	iter, err := bc.db.NewIter(&pebble.IterOptions{
@@ -726,6 +856,41 @@ func (bc *Blockchain) Close() error {
 	}
 
 	return bc.db.Close()
+}
+
+func (bc *Blockchain) LastReorgStatus() (*ReorgStatus, error) {
+	encoded, err := loadValue(bc.db, reorgStatusKey)
+	if err != nil {
+		if errors.Is(err, pebble.ErrNotFound) {
+			return nil, nil
+		}
+		return nil, err
+	}
+
+	var status ReorgStatus
+	if err := json.Unmarshal(encoded, &status); err != nil {
+		return nil, err
+	}
+	return &status, nil
+}
+
+func (bc *Blockchain) RecentChainEvents(limit int) ([]ChainEvent, error) {
+	encoded, err := loadValue(bc.db, chainEventLogKey)
+	if err != nil {
+		if errors.Is(err, pebble.ErrNotFound) {
+			return []ChainEvent{}, nil
+		}
+		return nil, err
+	}
+
+	var events []ChainEvent
+	if err := json.Unmarshal(encoded, &events); err != nil {
+		return nil, err
+	}
+	if limit > 0 && len(events) > limit {
+		return append([]ChainEvent(nil), events[:limit]...), nil
+	}
+	return append([]ChainEvent(nil), events...), nil
 }
 
 func openDB(dataDir string) (*pebble.DB, error) {
@@ -847,6 +1012,377 @@ func (bc *Blockchain) ensureNoMempoolConflicts(tx Transaction) error {
 	}
 
 	return nil
+}
+
+func (bc *Blockchain) switchTip(newTip []byte) error {
+	oldTip := append([]byte(nil), bc.tip...)
+	if bytes.Equal(oldTip, newTip) {
+		return nil
+	}
+	oldBlock, err := bc.blockByHash(oldTip)
+	if err != nil {
+		return err
+	}
+	newBlock, err := bc.blockByHash(newTip)
+	if err != nil {
+		return err
+	}
+
+	reorgSet, err := bc.reorgTransactionSet(oldTip, newTip)
+	if err != nil {
+		return err
+	}
+
+	batch := bc.db.NewBatch()
+	defer batch.Close()
+
+	if err := batch.Set(lastHashKey, newTip, nil); err != nil {
+		return err
+	}
+	if err := batch.Commit(pebble.Sync); err != nil {
+		return err
+	}
+
+	bc.tip = append([]byte(nil), newTip...)
+	if err := bc.ReindexUTXO(); err != nil {
+		return err
+	}
+
+	restored, dropped, err := bc.reconcileMempoolAfterReorg(reorgSet)
+	if err != nil {
+		return err
+	}
+
+	status := ReorgStatus{
+		Timestamp:             time.Now().UTC().Format(time.RFC3339),
+		OldHeight:             oldBlock.Height,
+		NewHeight:             newBlock.Height,
+		OldTip:                oldBlock.HashHex(),
+		NewTip:                newBlock.HashHex(),
+		RestoredTxCount:       restored,
+		DroppedConfirmedCount: dropped,
+	}
+	if err := bc.persistReorgStatus(status); err != nil {
+		return err
+	}
+	return bc.appendChainEvent(ChainEvent{
+		Timestamp:             status.Timestamp,
+		Kind:                  "reorg",
+		Summary:               fmt.Sprintf("reorg %d->%d restored=%d dropped=%d", status.OldHeight, status.NewHeight, status.RestoredTxCount, status.DroppedConfirmedCount),
+		OldHeight:             status.OldHeight,
+		NewHeight:             status.NewHeight,
+		OldTip:                status.OldTip,
+		NewTip:                status.NewTip,
+		RestoredTxCount:       status.RestoredTxCount,
+		DroppedConfirmedCount: status.DroppedConfirmedCount,
+	})
+}
+
+func (bc *Blockchain) blockByHash(hash []byte) (*Block, error) {
+	data, err := loadValue(bc.db, hash)
+	if err != nil {
+		return nil, err
+	}
+	return DeserializeBlock(data)
+}
+
+func (bc *Blockchain) blocksFromTipHash(tipHash []byte) ([]*Block, error) {
+	currentHash := append([]byte(nil), tipHash...)
+	var blocks []*Block
+
+	for len(currentHash) > 0 {
+		block, err := bc.blockByHash(currentHash)
+		if err != nil {
+			return nil, err
+		}
+		blocks = append(blocks, block)
+		currentHash = append([]byte(nil), block.PrevBlockHash...)
+	}
+
+	return blocks, nil
+}
+
+func (bc *Blockchain) validateBlockOnBranch(block *Block, parentHash []byte) error {
+	if block == nil {
+		return ErrInvalidBlock
+	}
+	if !block.VerifyMerkleRoot() || !block.VerifyProofOfWork() {
+		return ErrInvalidBlock
+	}
+	if len(block.Transactions) == 0 {
+		return ErrInvalidBlock
+	}
+
+	txIndex, utxoState, err := bc.branchState(parentHash)
+	if err != nil {
+		return err
+	}
+
+	coinbaseCount := 0
+	for idx, tx := range block.Transactions {
+		if tx.IsCoinbase() {
+			coinbaseCount++
+			if idx != 0 {
+				return ErrInvalidBlock
+			}
+			if err := applyTransactionToState(tx, txIndex, utxoState); err != nil {
+				return err
+			}
+			continue
+		}
+
+		if err := validateTransactionOnState(tx, txIndex, utxoState); err != nil {
+			return err
+		}
+		if err := applyTransactionToState(tx, txIndex, utxoState); err != nil {
+			return err
+		}
+	}
+	if coinbaseCount != 1 {
+		return ErrInvalidBlock
+	}
+
+	return nil
+}
+
+func (bc *Blockchain) branchState(parentHash []byte) (map[string]Transaction, map[string][]CachedUTXO, error) {
+	txIndex := make(map[string]Transaction)
+	utxoState := make(map[string][]CachedUTXO)
+
+	if len(parentHash) == 0 {
+		return txIndex, utxoState, nil
+	}
+
+	blocks, err := bc.blocksFromTipHash(parentHash)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	for i := len(blocks) - 1; i >= 0; i-- {
+		block := blocks[i]
+		for _, tx := range block.Transactions {
+			if err := applyTransactionToState(tx, txIndex, utxoState); err != nil {
+				return nil, nil, err
+			}
+		}
+	}
+
+	return txIndex, utxoState, nil
+}
+
+func validateTransactionOnState(tx Transaction, prevTXs map[string]Transaction, utxoState map[string][]CachedUTXO) error {
+	if tx.IsCoinbase() {
+		return nil
+	}
+	if !tx.Verify(prevTXs) {
+		return ErrInvalidTransaction
+	}
+
+	seen := make(map[string]struct{})
+	for _, input := range tx.Inputs {
+		prevTx, ok := prevTXs[input.TxIDHex()]
+		if !ok {
+			return ErrTransactionNotFound
+		}
+		if input.Out < 0 || input.Out >= len(prevTx.Outputs) {
+			return ErrInvalidTransaction
+		}
+
+		key := fmt.Sprintf("%s:%d", input.TxIDHex(), input.Out)
+		if _, exists := seen[key]; exists {
+			return ErrDoubleSpend
+		}
+		seen[key] = struct{}{}
+
+		if !outputAvailableInState(utxoState, input.TxIDHex(), input.Out) {
+			return ErrDoubleSpend
+		}
+	}
+
+	return nil
+}
+
+func applyTransactionToState(tx Transaction, txIndex map[string]Transaction, utxoState map[string][]CachedUTXO) error {
+	if !tx.IsCoinbase() {
+		for _, input := range tx.Inputs {
+			txIDHex := input.TxIDHex()
+			cached := utxoState[txIDHex]
+			var remaining []CachedUTXO
+			found := false
+			for _, item := range cached {
+				if item.Index == input.Out {
+					found = true
+					continue
+				}
+				remaining = append(remaining, item)
+			}
+			if !found {
+				return ErrInvalidTransaction
+			}
+			if len(remaining) == 0 {
+				delete(utxoState, txIDHex)
+			} else {
+				utxoState[txIDHex] = remaining
+			}
+		}
+	}
+
+	outputs := make([]CachedUTXO, 0, len(tx.Outputs))
+	for idx, output := range tx.Outputs {
+		outputs = append(outputs, CachedUTXO{
+			Index:  idx,
+			Output: output,
+		})
+	}
+	utxoState[tx.IDHex()] = outputs
+	txIndex[tx.IDHex()] = tx.Clone()
+	return nil
+}
+
+func outputAvailableInState(utxoState map[string][]CachedUTXO, txIDHex string, out int) bool {
+	for _, item := range utxoState[txIDHex] {
+		if item.Index == out {
+			return true
+		}
+	}
+	return false
+}
+
+type reorgTransactionSet struct {
+	confirmedOnNew map[string]struct{}
+	resurrect      []Transaction
+}
+
+func (bc *Blockchain) reorgTransactionSet(oldTip []byte, newTip []byte) (reorgTransactionSet, error) {
+	oldBlocks, err := bc.blocksFromTipHash(oldTip)
+	if err != nil {
+		return reorgTransactionSet{}, err
+	}
+	newBlocks, err := bc.blocksFromTipHash(newTip)
+	if err != nil {
+		return reorgTransactionSet{}, err
+	}
+
+	oldSet := make(map[string]int, len(oldBlocks))
+	for idx, block := range oldBlocks {
+		oldSet[block.HashHex()] = idx
+	}
+
+	commonOldIdx := -1
+	commonNewIdx := -1
+	for idx, block := range newBlocks {
+		if oldIdx, ok := oldSet[block.HashHex()]; ok {
+			commonOldIdx = oldIdx
+			commonNewIdx = idx
+			break
+		}
+	}
+	if commonOldIdx == -1 || commonNewIdx == -1 {
+		return reorgTransactionSet{}, ErrInvalidBlock
+	}
+
+	confirmed := make(map[string]struct{})
+	for _, block := range newBlocks {
+		for _, tx := range block.Transactions {
+			if tx.IsCoinbase() {
+				continue
+			}
+			confirmed[tx.IDHex()] = struct{}{}
+		}
+	}
+
+	var resurrect []Transaction
+	for idx := commonOldIdx - 1; idx >= 0; idx-- {
+		block := oldBlocks[idx]
+		for _, tx := range block.Transactions {
+			if tx.IsCoinbase() {
+				continue
+			}
+			if _, exists := confirmed[tx.IDHex()]; exists {
+				continue
+			}
+			resurrect = append(resurrect, tx.Clone())
+		}
+	}
+
+	return reorgTransactionSet{
+		confirmedOnNew: confirmed,
+		resurrect:      resurrect,
+	}, nil
+}
+
+func (bc *Blockchain) reconcileMempoolAfterReorg(set reorgTransactionSet) (int, int, error) {
+	pending, err := bc.PendingTransactions()
+	if err != nil {
+		return 0, 0, err
+	}
+
+	batch := bc.db.NewBatch()
+	defer batch.Close()
+	dropped := 0
+	for _, tx := range pending {
+		if _, confirmed := set.confirmedOnNew[tx.IDHex()]; confirmed {
+			if err := batch.Delete(mempoolKey(tx.ID), nil); err != nil {
+				return 0, 0, err
+			}
+			dropped++
+		}
+	}
+	if err := batch.Commit(pebble.Sync); err != nil {
+		return 0, 0, err
+	}
+
+	existing, err := bc.PendingTransactions()
+	if err != nil {
+		return 0, 0, err
+	}
+	existingSet := make(map[string]struct{}, len(existing))
+	for _, tx := range existing {
+		existingSet[tx.IDHex()] = struct{}{}
+	}
+
+	restored := 0
+	for _, tx := range set.resurrect {
+		if _, confirmed := set.confirmedOnNew[tx.IDHex()]; confirmed {
+			continue
+		}
+		if _, exists := existingSet[tx.IDHex()]; exists {
+			continue
+		}
+		if err := bc.AddToMempool(tx); err != nil {
+			continue
+		}
+		existingSet[tx.IDHex()] = struct{}{}
+		restored++
+	}
+
+	return restored, dropped, nil
+}
+
+func (bc *Blockchain) persistReorgStatus(status ReorgStatus) error {
+	encoded, err := json.Marshal(status)
+	if err != nil {
+		return err
+	}
+	return bc.db.Set(reorgStatusKey, encoded, pebble.Sync)
+}
+
+func (bc *Blockchain) appendChainEvent(event ChainEvent) error {
+	events, err := bc.RecentChainEvents(0)
+	if err != nil {
+		return err
+	}
+
+	events = append([]ChainEvent{event}, events...)
+	if len(events) > maxChainEvents {
+		events = events[:maxChainEvents]
+	}
+
+	encoded, err := json.Marshal(events)
+	if err != nil {
+		return err
+	}
+	return bc.db.Set(chainEventLogKey, encoded, pebble.Sync)
 }
 
 func applyUTXOChanges(db *pebble.DB, batch *pebble.Batch, block *Block) error {

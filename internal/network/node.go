@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/gob"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"net"
@@ -21,18 +22,38 @@ type Node struct {
 	DataDir      string
 	MinerAddress string
 
-	mu      sync.RWMutex
-	chainMu sync.Mutex
-	peers   map[string]struct{}
+	mu             sync.RWMutex
+	chainMu        sync.Mutex
+	peers          map[string]struct{}
+	orphanBlocks   map[string]blockchain.Block
+	orphanChildren map[string][]string
+	events         []NodeEvent
 }
+
+type NodeEvent struct {
+	Timestamp string
+	Kind      string
+	Detail    string
+}
+
+type ChainSnapshot struct {
+	Initialized  bool
+	Height       int
+	MempoolCount int
+}
+
+const maxNodeEvents = 12
 
 // NewNode creates a network node with one listening address and local chain path.
 func NewNode(address, dataDir, minerAddress string) *Node {
 	node := &Node{
-		Address:      address,
-		DataDir:      dataDir,
-		MinerAddress: minerAddress,
-		peers:        make(map[string]struct{}),
+		Address:        address,
+		DataDir:        dataDir,
+		MinerAddress:   minerAddress,
+		peers:          make(map[string]struct{}),
+		orphanBlocks:   make(map[string]blockchain.Block),
+		orphanChildren: make(map[string][]string),
+		events:         make([]NodeEvent, 0, maxNodeEvents),
 	}
 	node.addPeer(address)
 	return node
@@ -50,6 +71,7 @@ func (n *Node) Listen(ctx context.Context) error {
 	n.Address = ln.Addr().String()
 	n.peers[n.Address] = struct{}{}
 	n.mu.Unlock()
+	n.recordEvent("listen", fmt.Sprintf("listening at %s", n.Address))
 
 	go func() {
 		<-ctx.Done()
@@ -88,6 +110,7 @@ func (n *Node) Connect(peer string) error {
 	if err != nil {
 		return err
 	}
+	n.recordEvent("connect", fmt.Sprintf("send version to %s height=%d", peer, height))
 	return n.send(peer, "version", versionMessage{
 		From:       n.Address,
 		BestHeight: height,
@@ -107,6 +130,80 @@ func (n *Node) KnownPeers() []string {
 	return peers
 }
 
+// OrphanCount returns the number of buffered orphan blocks.
+func (n *Node) OrphanCount() int {
+	n.mu.RLock()
+	defer n.mu.RUnlock()
+	return len(n.orphanBlocks)
+}
+
+// RecentEvents returns a snapshot of recent node events, newest first.
+func (n *Node) RecentEvents() []NodeEvent {
+	n.mu.RLock()
+	defer n.mu.RUnlock()
+	events := make([]NodeEvent, len(n.events))
+	copy(events, n.events)
+	return events
+}
+
+// EnsureBlockchain initializes one local chain when the node has none yet.
+func (n *Node) EnsureBlockchain(genesisAddress string) error {
+	n.chainMu.Lock()
+	defer n.chainMu.Unlock()
+
+	exists, err := blockchain.ChainExists(n.DataDir)
+	if err != nil {
+		return err
+	}
+	if exists {
+		return nil
+	}
+
+	bc, err := blockchain.CreateBlockchain(n.DataDir, genesisAddress)
+	if err != nil {
+		return err
+	}
+	defer bc.Close()
+
+	n.recordEvent("chain_init", fmt.Sprintf("initialized local chain reward=%s", genesisAddress))
+	return nil
+}
+
+// ChainSnapshot returns safe chain status information for one node.
+func (n *Node) ChainSnapshot() (ChainSnapshot, error) {
+	n.chainMu.Lock()
+	defer n.chainMu.Unlock()
+
+	snapshot := ChainSnapshot{Height: -1}
+	exists, err := blockchain.ChainExists(n.DataDir)
+	if err != nil {
+		return snapshot, err
+	}
+	if !exists {
+		return snapshot, nil
+	}
+
+	bc, err := blockchain.OpenBlockchain(n.DataDir)
+	if err != nil {
+		return snapshot, err
+	}
+	defer bc.Close()
+
+	height, err := bc.Height()
+	if err != nil {
+		return snapshot, err
+	}
+	mempoolCount, err := bc.MempoolSize()
+	if err != nil {
+		return snapshot, err
+	}
+
+	snapshot.Initialized = true
+	snapshot.Height = height
+	snapshot.MempoolCount = mempoolCount
+	return snapshot, nil
+}
+
 // SubmitTransaction creates one local transaction and broadcasts it.
 func (n *Node) SubmitTransaction(from *wallet.Wallet, to string, amount int, fee int) (blockchain.Transaction, error) {
 	n.chainMu.Lock()
@@ -122,6 +219,7 @@ func (n *Node) SubmitTransaction(from *wallet.Wallet, to string, amount int, fee
 	if err != nil {
 		return blockchain.Transaction{}, err
 	}
+	n.recordEvent("tx_submit", fmt.Sprintf("submitted tx %s", tx.IDHex()))
 
 	n.broadcast("tx", txMessage{
 		From: n.Address,
@@ -150,11 +248,13 @@ func (n *Node) MinePending() (*blockchain.Block, error) {
 	if err != nil {
 		return nil, err
 	}
+	n.recordEvent("mine", fmt.Sprintf("mined block height=%d hash=%s", block.Height, block.HashHex()))
 
 	n.broadcast("block", blockMessage{
 		From:  n.Address,
 		Block: *block,
 	}, n.Address)
+	_ = n.announceTipHeightExcept(block.Height, "")
 
 	return block, nil
 }
@@ -209,6 +309,7 @@ func (n *Node) handleConn(conn net.Conn) error {
 
 func (n *Node) handleVersion(msg versionMessage) error {
 	n.addPeer(msg.From)
+	n.recordEvent("version", fmt.Sprintf("received version from %s height=%d", msg.From, msg.BestHeight))
 	_ = n.send(msg.From, "addr", addrMessage{From: n.Address, Peers: n.KnownPeers()})
 
 	n.chainMu.Lock()
@@ -229,6 +330,7 @@ func (n *Node) handleVersion(msg versionMessage) error {
 }
 
 func (n *Node) handleAddr(msg addrMessage) error {
+	n.recordEvent("addr", fmt.Sprintf("received %d peers from %s", len(msg.Peers), msg.From))
 	for _, peer := range msg.Peers {
 		n.addPeer(peer)
 	}
@@ -244,8 +346,7 @@ func (n *Node) handleBlocks(msg blocksMessage) error {
 	defer n.chainMu.Unlock()
 
 	for _, block := range msg.Blocks {
-		blockCopy := block
-		if err := blockchain.ImportBlockToDir(n.DataDir, &blockCopy); err != nil && !errors.Is(err, blockchain.ErrInvalidBlock) && !errors.Is(err, blockchain.ErrDoubleSpend) && !errors.Is(err, blockchain.ErrInvalidTransaction) {
+		if err := n.importOrBufferBlock(msg.From, block); err != nil {
 			return err
 		}
 	}
@@ -270,6 +371,7 @@ func (n *Node) handleTx(msg txMessage) error {
 	if err := bc.AddToMempool(msg.Tx); err != nil {
 		return nil
 	}
+	n.recordEvent("tx_receive", fmt.Sprintf("received tx %s from %s", msg.Tx.IDHex(), msg.From))
 
 	n.broadcast("tx", msg, msg.From)
 	return nil
@@ -280,13 +382,10 @@ func (n *Node) handleBlock(msg blockMessage) error {
 	n.chainMu.Lock()
 	defer n.chainMu.Unlock()
 
-	blockCopy := msg.Block
-	if err := blockchain.ImportBlockToDir(n.DataDir, &blockCopy); err != nil {
-		if errors.Is(err, blockchain.ErrInvalidBlock) || errors.Is(err, blockchain.ErrBlockchainNotInitialized) || errors.Is(err, blockchain.ErrDoubleSpend) || errors.Is(err, blockchain.ErrInvalidTransaction) {
-			return nil
-		}
+	if err := n.importOrBufferBlock(msg.From, msg.Block); err != nil {
 		return err
 	}
+	n.recordEvent("block_receive", fmt.Sprintf("received block height=%d from %s", msg.Block.Height, msg.From))
 
 	n.broadcast("block", msg, msg.From)
 	return nil
@@ -357,7 +456,166 @@ func (n *Node) addPeer(peer string) {
 	}
 	n.mu.Lock()
 	defer n.mu.Unlock()
+	_, exists := n.peers[peer]
 	n.peers[peer] = struct{}{}
+	if !exists {
+		n.events = append([]NodeEvent{{
+			Timestamp: time.Now().UTC().Format(time.RFC3339),
+			Kind:      "peer",
+			Detail:    fmt.Sprintf("peer added %s", peer),
+		}}, n.events...)
+		if len(n.events) > maxNodeEvents {
+			n.events = n.events[:maxNodeEvents]
+		}
+	}
+}
+
+func (n *Node) importOrBufferBlock(from string, block blockchain.Block) error {
+	beforeHeight, _ := blockchain.BestHeight(n.DataDir)
+	blockCopy := block
+	if err := blockchain.ImportBlockToDir(n.DataDir, &blockCopy); err != nil {
+		switch {
+		case errors.Is(err, blockchain.ErrOrphanBlock):
+			n.bufferOrphan(block)
+			n.recordEvent("orphan", fmt.Sprintf("buffered orphan height=%d hash=%s", block.Height, block.HashHex()))
+			_ = n.requestMissingParent(from, block.Height)
+			return nil
+		case errors.Is(err, blockchain.ErrInvalidBlock),
+			errors.Is(err, blockchain.ErrBlockchainNotInitialized),
+			errors.Is(err, blockchain.ErrDoubleSpend),
+			errors.Is(err, blockchain.ErrInvalidTransaction):
+			return nil
+		default:
+			return err
+		}
+	}
+
+	n.recordEvent("block_import", fmt.Sprintf("imported block height=%d hash=%s", block.Height, block.HashHex()))
+	n.processOrphanDescendants(from, block.Hash)
+	afterHeight, _ := blockchain.BestHeight(n.DataDir)
+	if afterHeight > beforeHeight {
+		_ = n.announceTipHeightExcept(afterHeight, from)
+	}
+	return nil
+}
+
+func (n *Node) requestMissingParent(peer string, orphanHeight int) error {
+	if peer == "" {
+		return nil
+	}
+	fromHeight := orphanHeight - 2
+	if fromHeight < -1 {
+		fromHeight = -1
+	}
+	n.recordEvent("parent_request", fmt.Sprintf("request parent range from %s starting %d", peer, fromHeight))
+	return n.send(peer, "getblocks", getBlocksMessage{
+		From:       n.Address,
+		FromHeight: fromHeight,
+	})
+}
+
+func (n *Node) processOrphanDescendants(from string, parentHash []byte) {
+	queue := [][]byte{append([]byte(nil), parentHash...)}
+	for len(queue) > 0 {
+		hash := queue[0]
+		queue = queue[1:]
+
+		children := n.takeOrphansByParent(hash)
+		for _, orphan := range children {
+			orphanCopy := orphan
+			if err := blockchain.ImportBlockToDir(n.DataDir, &orphanCopy); err != nil {
+				if errors.Is(err, blockchain.ErrOrphanBlock) {
+					n.bufferOrphan(orphan)
+					n.recordEvent("orphan", fmt.Sprintf("orphan still waiting height=%d hash=%s", orphan.Height, orphan.HashHex()))
+					_ = n.requestMissingParent(from, orphan.Height)
+				}
+				continue
+			}
+			n.recordEvent("orphan_resolved", fmt.Sprintf("resolved orphan height=%d hash=%s", orphan.Height, orphan.HashHex()))
+			queue = append(queue, append([]byte(nil), orphan.Hash...))
+		}
+	}
+}
+
+func (n *Node) bufferOrphan(block blockchain.Block) {
+	hashHex := block.HashHex()
+	prevHex := block.PrevHashHex()
+
+	n.mu.Lock()
+	defer n.mu.Unlock()
+	if _, exists := n.orphanBlocks[hashHex]; exists {
+		return
+	}
+	n.orphanBlocks[hashHex] = *cloneBlock(&block)
+	n.orphanChildren[prevHex] = append(n.orphanChildren[prevHex], hashHex)
+}
+
+func (n *Node) takeOrphansByParent(parentHash []byte) []blockchain.Block {
+	parentHex := hex.EncodeToString(parentHash)
+
+	n.mu.Lock()
+	defer n.mu.Unlock()
+
+	hashes := append([]string(nil), n.orphanChildren[parentHex]...)
+	delete(n.orphanChildren, parentHex)
+
+	orphans := make([]blockchain.Block, 0, len(hashes))
+	for _, hash := range hashes {
+		block, exists := n.orphanBlocks[hash]
+		if !exists {
+			continue
+		}
+		delete(n.orphanBlocks, hash)
+		orphans = append(orphans, block)
+	}
+	return orphans
+}
+
+func cloneBlock(block *blockchain.Block) *blockchain.Block {
+	if block == nil {
+		return nil
+	}
+	clone := *block
+	clone.PrevBlockHash = append([]byte(nil), block.PrevBlockHash...)
+	clone.Hash = append([]byte(nil), block.Hash...)
+	clone.MerkleRoot = append([]byte(nil), block.MerkleRoot...)
+	clone.Transactions = make([]blockchain.Transaction, len(block.Transactions))
+	for i, tx := range block.Transactions {
+		clone.Transactions[i] = tx.Clone()
+	}
+	return &clone
+}
+
+func (n *Node) recordEvent(kind, detail string) {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+	n.events = append([]NodeEvent{{
+		Timestamp: time.Now().UTC().Format(time.RFC3339),
+		Kind:      kind,
+		Detail:    detail,
+	}}, n.events...)
+	if len(n.events) > maxNodeEvents {
+		n.events = n.events[:maxNodeEvents]
+	}
+}
+
+func (n *Node) announceTipHeightExcept(height int, except string) error {
+	announced := 0
+	for _, peer := range n.KnownPeers() {
+		if peer == n.Address || peer == except {
+			continue
+		}
+		if err := n.send(peer, "version", versionMessage{
+			From:       n.Address,
+			BestHeight: height,
+		}); err == nil {
+			announced++
+		}
+	}
+	if announced > 0 {
+		n.recordEvent("tip_announce", fmt.Sprintf("announced height=%d to %d peer(s)", height, announced))
+	}
+	return nil
 }
 
 func encodePayload(v any) ([]byte, error) {

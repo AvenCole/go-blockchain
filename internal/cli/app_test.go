@@ -108,8 +108,54 @@ func TestCreateBlockchainAddBlockAndPrintChain(t *testing.T) {
 	if !strings.Contains(output, "Difficulty: ") || !strings.Contains(output, "Nonce: ") || !strings.Contains(output, "PoWValid: true") {
 		t.Fatalf("printchain output missing PoW fields: %q", output)
 	}
+	if !strings.Contains(output, "ScriptPubKey: OP_DUP OP_HASH160") {
+		t.Fatalf("printchain output missing ScriptPubKey: %q", output)
+	}
 	if !strings.Contains(output, "Output: to="+address+" value=50") {
 		t.Fatalf("printchain output missing coinbase output: %q", output)
+	}
+	stdout.Reset()
+	stderr.Reset()
+
+	if code := app.Run([]string{"showevents", "5"}); code != 0 {
+		t.Fatalf("showevents exit code = %d, stderr=%q", code, stderr.String())
+	}
+	if !strings.Contains(stdout.String(), "kind=main_block") {
+		t.Fatalf("showevents output = %q, want main_block event", stdout.String())
+	}
+}
+
+func TestRunShowScript(t *testing.T) {
+	cfg := config.Default()
+	cfg.DataDir = filepath.Join(t.TempDir(), "data")
+
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	app := NewApp(cfg, &stdout, &stderr)
+
+	if code := app.Run([]string{"createwallet"}); code != 0 {
+		t.Fatalf("createwallet exit code = %d, stderr=%q", code, stderr.String())
+	}
+	address := strings.TrimPrefix(strings.TrimSpace(stdout.String()), "created wallet address=")
+	stdout.Reset()
+	stderr.Reset()
+
+	if code := app.Run([]string{"showscript", address}); code != 0 {
+		t.Fatalf("showscript exit code = %d, stderr=%q", code, stderr.String())
+	}
+
+	output := stdout.String()
+	if !strings.Contains(output, "scriptPubKey=OP_DUP OP_HASH160") {
+		t.Fatalf("showscript output = %q, want P2PKH script", output)
+	}
+	stdout.Reset()
+	stderr.Reset()
+
+	if code := app.Run([]string{"showscript", address, "p2pk"}); code != 0 {
+		t.Fatalf("showscript p2pk exit code = %d, stderr=%q", code, stderr.String())
+	}
+	if !strings.Contains(stdout.String(), "template=p2pk") || !strings.Contains(stdout.String(), "OP_CHECKSIG") {
+		t.Fatalf("showscript p2pk output = %q, want P2PK script", stdout.String())
 	}
 }
 
@@ -191,6 +237,125 @@ func TestRunSendMineAndGetBalance(t *testing.T) {
 	}
 	if !strings.Contains(stdout.String(), "balance["+miner+"]=80") {
 		t.Fatalf("getbalance miner output = %q", stdout.String())
+	}
+}
+
+func TestRunSendP2PKAndMine(t *testing.T) {
+	cfg := config.Default()
+	cfg.DataDir = filepath.Join(t.TempDir(), "data")
+
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	app := NewApp(cfg, &stdout, &stderr)
+
+	if code := app.Run([]string{"createwallet"}); code != 0 {
+		t.Fatalf("createwallet miner exit code = %d, stderr=%q", code, stderr.String())
+	}
+	miner := strings.TrimPrefix(strings.TrimSpace(stdout.String()), "created wallet address=")
+	stdout.Reset()
+	stderr.Reset()
+
+	if code := app.Run([]string{"createwallet"}); code != 0 {
+		t.Fatalf("createwallet alice exit code = %d, stderr=%q", code, stderr.String())
+	}
+	alice := strings.TrimPrefix(strings.TrimSpace(stdout.String()), "created wallet address=")
+	stdout.Reset()
+	stderr.Reset()
+
+	if code := app.Run([]string{"createblockchain", miner}); code != 0 {
+		t.Fatalf("createblockchain exit code = %d, stderr=%q", code, stderr.String())
+	}
+	stdout.Reset()
+	stderr.Reset()
+
+	if code := app.Run([]string{"sendp2pk", miner, alice, "20", "1"}); code != 0 {
+		t.Fatalf("sendp2pk exit code = %d, stderr=%q", code, stderr.String())
+	}
+	if !strings.Contains(stdout.String(), "queued p2pk transaction") {
+		t.Fatalf("sendp2pk output = %q", stdout.String())
+	}
+	stdout.Reset()
+	stderr.Reset()
+
+	if code := app.Run([]string{"mine", miner}); code != 0 {
+		t.Fatalf("mine exit code = %d, stderr=%q", code, stderr.String())
+	}
+	stdout.Reset()
+	stderr.Reset()
+
+	if code := app.Run([]string{"printchain"}); code != 0 {
+		t.Fatalf("printchain exit code = %d, stderr=%q", code, stderr.String())
+	}
+	if !strings.Contains(stdout.String(), "ScriptPubKey: DATA[") || !strings.Contains(stdout.String(), "OP_CHECKSIG") {
+		t.Fatalf("printchain output = %q, want P2PK script", stdout.String())
+	}
+}
+
+func TestRunSendMultiSigAndSpendMultiSig(t *testing.T) {
+	cfg := config.Default()
+	cfg.DataDir = filepath.Join(t.TempDir(), "data")
+
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	app := NewApp(cfg, &stdout, &stderr)
+
+	createWallet := func() string {
+		if code := app.Run([]string{"createwallet"}); code != 0 {
+			t.Fatalf("createwallet exit code = %d, stderr=%q", code, stderr.String())
+		}
+		address := strings.TrimPrefix(strings.TrimSpace(stdout.String()), "created wallet address=")
+		stdout.Reset()
+		stderr.Reset()
+		return address
+	}
+
+	miner := createWallet()
+	alice := createWallet()
+	bob := createWallet()
+	carol := createWallet()
+
+	if code := app.Run([]string{"createblockchain", miner}); code != 0 {
+		t.Fatalf("createblockchain exit code = %d, stderr=%q", code, stderr.String())
+	}
+	stdout.Reset()
+	stderr.Reset()
+
+	if code := app.Run([]string{"sendmultisig", miner, "2", alice + "," + bob, "20", "1"}); code != 0 {
+		t.Fatalf("sendmultisig exit code = %d, stderr=%q", code, stderr.String())
+	}
+	if !strings.Contains(stdout.String(), "queued multisig transaction") {
+		t.Fatalf("sendmultisig output = %q", stdout.String())
+	}
+	txid := strings.TrimPrefix(strings.Split(strings.TrimSpace(stdout.String()), " ")[3], "txid=")
+	stdout.Reset()
+	stderr.Reset()
+
+	if code := app.Run([]string{"mine", miner}); code != 0 {
+		t.Fatalf("mine exit code = %d, stderr=%q", code, stderr.String())
+	}
+	stdout.Reset()
+	stderr.Reset()
+
+	if code := app.Run([]string{"spendmultisig", alice + "," + bob, txid, "0", carol, "10", "1"}); code != 0 {
+		t.Fatalf("spendmultisig exit code = %d, stderr=%q", code, stderr.String())
+	}
+	if !strings.Contains(stdout.String(), "queued spendmultisig transaction") {
+		t.Fatalf("spendmultisig output = %q", stdout.String())
+	}
+	stdout.Reset()
+	stderr.Reset()
+
+	if code := app.Run([]string{"mine", miner}); code != 0 {
+		t.Fatalf("mine second exit code = %d, stderr=%q", code, stderr.String())
+	}
+	stdout.Reset()
+	stderr.Reset()
+
+	if code := app.Run([]string{"getbalance", carol}); code != 0 {
+		t.Fatalf("getbalance carol exit code = %d, stderr=%q", code, stderr.String())
+	}
+	if !strings.Contains(stdout.String(), "balance["+carol+"]=10") {
+		t.Fatalf("getbalance carol output = %q", stdout.String())
 	}
 }
 
@@ -427,5 +592,97 @@ func TestSimDoubleSpendRejectsSecondTransaction(t *testing.T) {
 
 	if !strings.Contains(stdout.String(), "rejected=true") {
 		t.Fatalf("simdouble output = %q, want rejected second tx", stdout.String())
+	}
+}
+
+func TestSimForkSwitchesToLongerBranch(t *testing.T) {
+	cfg := config.Default()
+	cfg.DataDir = filepath.Join(t.TempDir(), "data")
+
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	app := NewApp(cfg, &stdout, &stderr)
+
+	if code := app.Run([]string{"createwallet"}); code != 0 {
+		t.Fatalf("createwallet exit code = %d, stderr=%q", code, stderr.String())
+	}
+	miner := strings.TrimPrefix(strings.TrimSpace(stdout.String()), "created wallet address=")
+	stdout.Reset()
+	stderr.Reset()
+
+	if code := app.Run([]string{"createblockchain", miner}); code != 0 {
+		t.Fatalf("createblockchain exit code = %d, stderr=%q", code, stderr.String())
+	}
+	stdout.Reset()
+	stderr.Reset()
+
+	if code := app.Run([]string{"addblock", "main-1"}); code != 0 {
+		t.Fatalf("addblock main-1 exit code = %d, stderr=%q", code, stderr.String())
+	}
+	stdout.Reset()
+	stderr.Reset()
+
+	if code := app.Run([]string{"simfork", miner, "2"}); code != 0 {
+		t.Fatalf("simfork exit code = %d, stderr=%q", code, stderr.String())
+	}
+	if !strings.Contains(stdout.String(), "switched=true") {
+		t.Fatalf("simfork output = %q, want switched=true", stdout.String())
+	}
+}
+
+func TestSimReorgRestoresTransactionToMempool(t *testing.T) {
+	cfg := config.Default()
+	cfg.DataDir = filepath.Join(t.TempDir(), "data")
+
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	app := NewApp(cfg, &stdout, &stderr)
+
+	if code := app.Run([]string{"createwallet"}); code != 0 {
+		t.Fatalf("createwallet miner exit code = %d, stderr=%q", code, stderr.String())
+	}
+	miner := strings.TrimPrefix(strings.TrimSpace(stdout.String()), "created wallet address=")
+	stdout.Reset()
+	stderr.Reset()
+
+	if code := app.Run([]string{"createwallet"}); code != 0 {
+		t.Fatalf("createwallet alice exit code = %d, stderr=%q", code, stderr.String())
+	}
+	alice := strings.TrimPrefix(strings.TrimSpace(stdout.String()), "created wallet address=")
+	stdout.Reset()
+	stderr.Reset()
+
+	if code := app.Run([]string{"createblockchain", miner}); code != 0 {
+		t.Fatalf("createblockchain exit code = %d, stderr=%q", code, stderr.String())
+	}
+	stdout.Reset()
+	stderr.Reset()
+
+	if code := app.Run([]string{"simreorg", miner, alice, "20", "1"}); code != 0 {
+		t.Fatalf("simreorg exit code = %d, stderr=%q", code, stderr.String())
+	}
+	if !strings.Contains(stdout.String(), "restored=true") {
+		t.Fatalf("simreorg output = %q, want restored=true", stdout.String())
+	}
+	if !strings.Contains(stdout.String(), "balance_after_reorg["+alice+"]=0") {
+		t.Fatalf("simreorg output = %q, want alice balance reset", stdout.String())
+	}
+	stdout.Reset()
+	stderr.Reset()
+
+	if code := app.Run([]string{"showreorg"}); code != 0 {
+		t.Fatalf("showreorg exit code = %d, stderr=%q", code, stderr.String())
+	}
+	if !strings.Contains(stdout.String(), "restored_tx=1") {
+		t.Fatalf("showreorg output = %q, want restored_tx=1", stdout.String())
+	}
+	stdout.Reset()
+	stderr.Reset()
+
+	if code := app.Run([]string{"showevents", "3"}); code != 0 {
+		t.Fatalf("showevents exit code = %d, stderr=%q", code, stderr.String())
+	}
+	if !strings.Contains(stdout.String(), "kind=reorg") {
+		t.Fatalf("showevents output = %q, want reorg event", stdout.String())
 	}
 }

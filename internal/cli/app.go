@@ -2,6 +2,7 @@ package cli
 
 import (
 	"context"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
@@ -63,6 +64,12 @@ func (a App) Run(args []string) int {
 		return a.printChain(args[1:])
 	case "send":
 		return a.send(args[1:])
+	case "sendp2pk":
+		return a.sendP2PK(args[1:])
+	case "sendmultisig":
+		return a.sendMultiSig(args[1:])
+	case "spendmultisig":
+		return a.spendMultiSig(args[1:])
 	case "getbalance":
 		return a.getBalance(args[1:])
 	case "createwallet":
@@ -71,6 +78,8 @@ func (a App) Run(args []string) int {
 		return a.listAddresses(args[1:])
 	case "reindexutxo":
 		return a.reindexUTXO(args[1:])
+	case "showscript":
+		return a.showScript(args[1:])
 	case "mine":
 		return a.mine(args[1:])
 	case "printmempool":
@@ -79,6 +88,14 @@ func (a App) Run(args []string) int {
 		return a.startNode(args[1:])
 	case "simdouble":
 		return a.simulateDoubleSpend(args[1:])
+	case "simfork":
+		return a.simulateLongerFork(args[1:])
+	case "simreorg":
+		return a.simulateReorgMempoolRecovery(args[1:])
+	case "showreorg":
+		return a.showReorgStatus(args[1:])
+	case "showevents":
+		return a.showChainEvents(args[1:])
 	case "runperf":
 		return a.runPerformance(args[1:])
 	default:
@@ -111,14 +128,22 @@ func (a App) printHelp() {
 	fmt.Fprintln(a.stdout, "  addblock <label>                    Append a debug coinbase-style block")
 	fmt.Fprintln(a.stdout, "  printchain                       Print the blockchain from tip to genesis")
 	fmt.Fprintln(a.stdout, "  send <from> <to> <amount> [fee]     Queue a signed transaction into the mempool")
+	fmt.Fprintln(a.stdout, "  sendp2pk <from> <to> <amount> [fee] Queue a transaction whose main output uses a P2PK script")
+	fmt.Fprintln(a.stdout, "  sendmultisig <from> <required> <addr1,addr2,...> <amount> [fee] Queue a transaction whose main output uses a multisig script")
+	fmt.Fprintln(a.stdout, "  spendmultisig <signer1,signer2,...> <source-txid> <out> <to> <amount> [fee] Spend a multisig output with ordered local signers")
 	fmt.Fprintln(a.stdout, "  getbalance <address>                Show the current UTXO balance for one address")
 	fmt.Fprintln(a.stdout, "  createwallet                     Create a new wallet and save it")
 	fmt.Fprintln(a.stdout, "  listaddresses                    List all saved wallet addresses")
 	fmt.Fprintln(a.stdout, "  reindexutxo                      Rebuild the cached UTXO set")
+	fmt.Fprintln(a.stdout, "  showscript <address>             Show the standard P2PKH locking script for one address")
 	fmt.Fprintln(a.stdout, "  startnode <addr> [seed] [miner]  Start one local network node")
 	fmt.Fprintln(a.stdout, "  mine <miner-address>             Mine all pending transactions into a block")
 	fmt.Fprintln(a.stdout, "  printmempool                     List pending transaction IDs")
 	fmt.Fprintln(a.stdout, "  simdouble <from> <to1> <to2> <amount> [fee]  Demonstrate double-spend rejection")
+	fmt.Fprintln(a.stdout, "  simfork <miner-address> [advance]  Demonstrate longest-chain fork switching")
+	fmt.Fprintln(a.stdout, "  simreorg <from> <to> [amount] [advance]  Demonstrate mempool recovery after a reorg")
+	fmt.Fprintln(a.stdout, "  showreorg                        Show the latest recorded reorg status")
+	fmt.Fprintln(a.stdout, "  showevents [limit]               Show recent recorded chain events")
 	fmt.Fprintln(a.stdout, "  runperf [lookups]                Run cache-vs-scan performance comparison")
 }
 
@@ -254,9 +279,11 @@ func (a App) printChain(args []string) int {
 			for _, input := range tx.Inputs {
 				source := input.FromDisplay()
 				fmt.Fprintf(a.stdout, "    Input: txid=%s out=%d source=%s\n", input.TxIDHex(), input.Out, source)
+				fmt.Fprintf(a.stdout, "      ScriptSig: %s\n", input.EffectiveScriptSig().String())
 			}
 			for _, output := range tx.Outputs {
 				fmt.Fprintf(a.stdout, "    Output: to=%s value=%d\n", output.Address(), output.Value)
+				fmt.Fprintf(a.stdout, "      ScriptPubKey: %s\n", output.EffectiveScriptPubKey().String())
 			}
 		}
 		fmt.Fprintln(a.stdout)
@@ -428,6 +455,310 @@ func (a App) reindexUTXO(args []string) int {
 
 	fmt.Fprintln(a.stdout, "utxo set reindexed")
 	return 0
+}
+
+func (a App) showScript(args []string) int {
+	if len(args) != 1 && len(args) != 2 && len(args) != 3 {
+		fmt.Fprintln(a.stderr, "showscript requires: <target> [p2pkh|p2pk|multisig] [required]")
+		return 1
+	}
+
+	template := "p2pkh"
+	if len(args) == 2 {
+		template = strings.ToLower(args[1])
+	}
+
+	fmt.Fprintf(a.stdout, "address=%s\n", args[0])
+	switch template {
+	case "p2pkh":
+		pubKeyHash, err := wallet.PublicKeyHashFromAddress(args[0])
+		if err != nil {
+			fmt.Fprintf(a.stderr, "decode address: %v\n", err)
+			return 1
+		}
+		script := blockchain.NewP2PKHLockingScript(pubKeyHash)
+		fmt.Fprintf(a.stdout, "template=p2pkh\n")
+		fmt.Fprintf(a.stdout, "pubKeyHash=%x\n", pubKeyHash)
+		fmt.Fprintf(a.stdout, "scriptPubKey=%s\n", script.String())
+		return 0
+	case "p2pk":
+		wallets, err := wallet.NewWallets(a.cfg.DataDir)
+		if err != nil {
+			fmt.Fprintf(a.stderr, "load wallets: %v\n", err)
+			return 1
+		}
+		toWallet, ok := wallets.GetWallet(args[0])
+		if !ok {
+			fmt.Fprintln(a.stderr, "p2pk requires the recipient wallet to exist locally")
+			return 1
+		}
+		script := blockchain.NewP2PKLockingScript(toWallet.PublicKey)
+		fmt.Fprintf(a.stdout, "template=p2pk\n")
+		fmt.Fprintf(a.stdout, "pubKey=%x\n", toWallet.PublicKey)
+		fmt.Fprintf(a.stdout, "scriptPubKey=%s\n", script.String())
+		return 0
+	case "multisig":
+		required := 2
+		if len(args) == 3 {
+			n, err := strconv.Atoi(args[2])
+			if err != nil || n <= 0 {
+				fmt.Fprintf(a.stderr, "parse required: %v\n", err)
+				return 1
+			}
+			required = n
+		}
+		wallets, err := wallet.NewWallets(a.cfg.DataDir)
+		if err != nil {
+			fmt.Fprintf(a.stderr, "load wallets: %v\n", err)
+			return 1
+		}
+		recipients, err := loadWalletsFromCSV(wallets, args[0])
+		if err != nil {
+			fmt.Fprintf(a.stderr, "multisig recipients: %v\n", err)
+			return 1
+		}
+		pubKeys := make([][]byte, 0, len(recipients))
+		for _, item := range recipients {
+			pubKeys = append(pubKeys, item.PublicKey)
+		}
+		script := blockchain.NewMultiSigLockingScript(required, pubKeys...)
+		fmt.Fprintf(a.stdout, "template=multisig\n")
+		fmt.Fprintf(a.stdout, "required=%d participants=%d\n", required, len(pubKeys))
+		fmt.Fprintf(a.stdout, "scriptPubKey=%s\n", script.String())
+		return 0
+	default:
+		fmt.Fprintf(a.stderr, "unknown script template: %s\n", template)
+		return 1
+	}
+}
+
+func (a App) sendP2PK(args []string) int {
+	if len(args) != 3 && len(args) != 4 {
+		fmt.Fprintln(a.stderr, "sendp2pk requires: <from> <to> <amount> [fee]")
+		return 1
+	}
+	if !wallet.ValidateAddress(args[0]) || !wallet.ValidateAddress(args[1]) {
+		fmt.Fprintln(a.stderr, "sendp2pk requires valid from/to wallet addresses")
+		return 1
+	}
+
+	amount, err := strconv.Atoi(args[2])
+	if err != nil {
+		fmt.Fprintf(a.stderr, "parse amount: %v\n", err)
+		return 1
+	}
+	fee := 0
+	if len(args) == 4 {
+		fee, err = strconv.Atoi(args[3])
+		if err != nil {
+			fmt.Fprintf(a.stderr, "parse fee: %v\n", err)
+			return 1
+		}
+	}
+
+	chain, err := blockchain.OpenBlockchain(a.cfg.DataDir)
+	if err != nil {
+		if errors.Is(err, blockchain.ErrBlockchainNotInitialized) {
+			fmt.Fprintln(a.stderr, "blockchain not initialized; run createblockchain first")
+			return 1
+		}
+		fmt.Fprintf(a.stderr, "open blockchain: %v\n", err)
+		return 1
+	}
+	defer chain.Close()
+
+	wallets, err := wallet.NewWallets(a.cfg.DataDir)
+	if err != nil {
+		fmt.Fprintf(a.stderr, "load wallets: %v\n", err)
+		return 1
+	}
+
+	fromWallet, ok := wallets.GetWallet(args[0])
+	if !ok {
+		fmt.Fprintln(a.stderr, "sender wallet not found")
+		return 1
+	}
+	toWallet, ok := wallets.GetWallet(args[1])
+	if !ok {
+		fmt.Fprintln(a.stderr, "recipient wallet not found; p2pk requires a locally known wallet")
+		return 1
+	}
+
+	tx, err := blockchain.NewP2PKTransaction(fromWallet, toWallet, amount, fee, chain)
+	if err != nil {
+		fmt.Fprintf(a.stderr, "build p2pk transaction: %v\n", err)
+		return 1
+	}
+	if err := chain.AddToMempool(tx); err != nil {
+		fmt.Fprintf(a.stderr, "queue p2pk transaction: %v\n", err)
+		return 1
+	}
+
+	fmt.Fprintf(a.stdout, "queued p2pk transaction txid=%s fee=%d\n", tx.IDHex(), fee)
+	return 0
+}
+
+func (a App) sendMultiSig(args []string) int {
+	if len(args) != 4 && len(args) != 5 {
+		fmt.Fprintln(a.stderr, "sendmultisig requires: <from> <required> <addr1,addr2,...> <amount> [fee]")
+		return 1
+	}
+	if !wallet.ValidateAddress(args[0]) {
+		fmt.Fprintln(a.stderr, "invalid sender address")
+		return 1
+	}
+
+	required, err := strconv.Atoi(args[1])
+	if err != nil || required <= 0 {
+		fmt.Fprintf(a.stderr, "parse required: %v\n", err)
+		return 1
+	}
+	amount, err := strconv.Atoi(args[3])
+	if err != nil || amount <= 0 {
+		fmt.Fprintf(a.stderr, "parse amount: %v\n", err)
+		return 1
+	}
+	fee := 0
+	if len(args) == 5 {
+		fee, err = strconv.Atoi(args[4])
+		if err != nil {
+			fmt.Fprintf(a.stderr, "parse fee: %v\n", err)
+			return 1
+		}
+	}
+
+	chain, err := blockchain.OpenBlockchain(a.cfg.DataDir)
+	if err != nil {
+		if errors.Is(err, blockchain.ErrBlockchainNotInitialized) {
+			fmt.Fprintln(a.stderr, "blockchain not initialized; run createblockchain first")
+			return 1
+		}
+		fmt.Fprintf(a.stderr, "open blockchain: %v\n", err)
+		return 1
+	}
+	defer chain.Close()
+
+	wallets, err := wallet.NewWallets(a.cfg.DataDir)
+	if err != nil {
+		fmt.Fprintf(a.stderr, "load wallets: %v\n", err)
+		return 1
+	}
+	fromWallet, ok := wallets.GetWallet(args[0])
+	if !ok {
+		fmt.Fprintln(a.stderr, "sender wallet not found")
+		return 1
+	}
+	recipients, err := loadWalletsFromCSV(wallets, args[2])
+	if err != nil {
+		fmt.Fprintf(a.stderr, "multisig recipients: %v\n", err)
+		return 1
+	}
+
+	tx, err := blockchain.NewMultiSigTransaction(fromWallet, amount, fee, required, recipients, chain)
+	if err != nil {
+		fmt.Fprintf(a.stderr, "build multisig transaction: %v\n", err)
+		return 1
+	}
+	if err := chain.AddToMempool(tx); err != nil {
+		fmt.Fprintf(a.stderr, "queue multisig transaction: %v\n", err)
+		return 1
+	}
+
+	fmt.Fprintf(a.stdout, "queued multisig transaction txid=%s fee=%d\n", tx.IDHex(), fee)
+	return 0
+}
+
+func (a App) spendMultiSig(args []string) int {
+	if len(args) != 5 && len(args) != 6 {
+		fmt.Fprintln(a.stderr, "spendmultisig requires: <signer1,signer2,...> <source-txid> <out> <to> <amount> [fee]")
+		return 1
+	}
+	if !wallet.ValidateAddress(args[3]) {
+		fmt.Fprintln(a.stderr, "invalid recipient address")
+		return 1
+	}
+
+	sourceTxID, err := hex.DecodeString(args[1])
+	if err != nil {
+		fmt.Fprintf(a.stderr, "decode source txid: %v\n", err)
+		return 1
+	}
+	sourceOut, err := strconv.Atoi(args[2])
+	if err != nil || sourceOut < 0 {
+		fmt.Fprintf(a.stderr, "parse source out: %v\n", err)
+		return 1
+	}
+	amount, err := strconv.Atoi(args[4])
+	if err != nil || amount <= 0 {
+		fmt.Fprintf(a.stderr, "parse amount: %v\n", err)
+		return 1
+	}
+	fee := 0
+	if len(args) == 6 {
+		fee, err = strconv.Atoi(args[5])
+		if err != nil {
+			fmt.Fprintf(a.stderr, "parse fee: %v\n", err)
+			return 1
+		}
+	}
+
+	chain, err := blockchain.OpenBlockchain(a.cfg.DataDir)
+	if err != nil {
+		if errors.Is(err, blockchain.ErrBlockchainNotInitialized) {
+			fmt.Fprintln(a.stderr, "blockchain not initialized; run createblockchain first")
+			return 1
+		}
+		fmt.Fprintf(a.stderr, "open blockchain: %v\n", err)
+		return 1
+	}
+	defer chain.Close()
+
+	wallets, err := wallet.NewWallets(a.cfg.DataDir)
+	if err != nil {
+		fmt.Fprintf(a.stderr, "load wallets: %v\n", err)
+		return 1
+	}
+	signers, err := loadWalletsFromCSV(wallets, args[0])
+	if err != nil {
+		fmt.Fprintf(a.stderr, "multisig signers: %v\n", err)
+		return 1
+	}
+
+	tx, err := blockchain.NewSpendMultiSigTransaction(signers, sourceTxID, sourceOut, args[3], amount, fee, chain)
+	if err != nil {
+		fmt.Fprintf(a.stderr, "build spendmultisig transaction: %v\n", err)
+		return 1
+	}
+	if err := chain.AddToMempool(tx); err != nil {
+		fmt.Fprintf(a.stderr, "queue spendmultisig transaction: %v\n", err)
+		return 1
+	}
+
+	fmt.Fprintf(a.stdout, "queued spendmultisig transaction txid=%s fee=%d\n", tx.IDHex(), fee)
+	return 0
+}
+
+func loadWalletsFromCSV(wallets *wallet.Wallets, csv string) ([]*wallet.Wallet, error) {
+	items := strings.Split(csv, ",")
+	result := make([]*wallet.Wallet, 0, len(items))
+	for _, item := range items {
+		address := strings.TrimSpace(item)
+		if address == "" {
+			continue
+		}
+		if !wallet.ValidateAddress(address) {
+			return nil, fmt.Errorf("invalid wallet address: %s", address)
+		}
+		w, ok := wallets.GetWallet(address)
+		if !ok {
+			return nil, fmt.Errorf("wallet not found locally: %s", address)
+		}
+		result = append(result, w)
+	}
+	if len(result) == 0 {
+		return nil, fmt.Errorf("no wallet addresses provided")
+	}
+	return result, nil
 }
 
 func (a App) mine(args []string) int {
@@ -604,6 +935,276 @@ func (a App) simulateDoubleSpend(args []string) int {
 
 	fmt.Fprintf(a.stdout, "first_tx=%s queued\n", firstTx.IDHex())
 	fmt.Fprintf(a.stdout, "second_tx=%s rejected=%v\n", secondTx.IDHex(), secondErr != nil)
+	return 0
+}
+
+func (a App) simulateLongerFork(args []string) int {
+	if len(args) != 1 && len(args) != 2 {
+		fmt.Fprintln(a.stderr, "simfork requires: <miner-address> [advance]")
+		return 1
+	}
+	if !wallet.ValidateAddress(args[0]) {
+		fmt.Fprintln(a.stderr, "invalid miner address")
+		return 1
+	}
+
+	advance := 1
+	if len(args) == 2 {
+		n, err := strconv.Atoi(args[1])
+		if err != nil || n <= 0 {
+			fmt.Fprintf(a.stderr, "parse advance: %v\n", err)
+			return 1
+		}
+		advance = n
+	}
+
+	chain, err := blockchain.OpenBlockchain(a.cfg.DataDir)
+	if err != nil {
+		if errors.Is(err, blockchain.ErrBlockchainNotInitialized) {
+			fmt.Fprintln(a.stderr, "blockchain not initialized; run createblockchain first")
+			return 1
+		}
+		fmt.Fprintf(a.stderr, "open blockchain: %v\n", err)
+		return 1
+	}
+	defer chain.Close()
+
+	current, err := chain.CurrentBlock()
+	if err != nil {
+		fmt.Fprintf(a.stderr, "current block: %v\n", err)
+		return 1
+	}
+	blocks, err := chain.Blocks()
+	if err != nil {
+		fmt.Fprintf(a.stderr, "read chain: %v\n", err)
+		return 1
+	}
+	if len(blocks) == 0 {
+		fmt.Fprintln(a.stderr, "chain has no blocks")
+		return 1
+	}
+	genesis := blocks[len(blocks)-1]
+
+	targetHeight := current.Height + advance
+	prevHash := append([]byte(nil), genesis.Hash...)
+	var imported *blockchain.Block
+
+	for height := 1; height <= targetHeight; height++ {
+		forkBlock := blockchain.NewBlock(
+			[]blockchain.Transaction{blockchain.NewCoinbaseTransaction(args[0], fmt.Sprintf("fork height %d", height))},
+			prevHash,
+			height,
+		)
+		if err := chain.ImportBlock(forkBlock); err != nil {
+			fmt.Fprintf(a.stderr, "import fork block height=%d: %v\n", height, err)
+			return 1
+		}
+		prevHash = append([]byte(nil), forkBlock.Hash...)
+		imported = forkBlock
+	}
+
+	after, err := chain.CurrentBlock()
+	if err != nil {
+		fmt.Fprintf(a.stderr, "current block after fork: %v\n", err)
+		return 1
+	}
+
+	fmt.Fprintf(a.stdout, "before_height=%d before_tip=%s\n", current.Height, current.HashHex())
+	fmt.Fprintf(a.stdout, "fork_tip=%s fork_height=%d\n", imported.HashHex(), imported.Height)
+	fmt.Fprintf(a.stdout, "after_height=%d after_tip=%s\n", after.Height, after.HashHex())
+	fmt.Fprintf(a.stdout, "switched=%t\n", after.HashHex() == imported.HashHex())
+	return 0
+}
+
+func (a App) simulateReorgMempoolRecovery(args []string) int {
+	if len(args) != 2 && len(args) != 3 && len(args) != 4 {
+		fmt.Fprintln(a.stderr, "simreorg requires: <from> <to> [amount] [advance]")
+		return 1
+	}
+	if !wallet.ValidateAddress(args[0]) || !wallet.ValidateAddress(args[1]) {
+		fmt.Fprintln(a.stderr, "simreorg requires valid from/to wallet addresses")
+		return 1
+	}
+
+	amount := 20
+	advance := 1
+	var err error
+	if len(args) >= 3 {
+		amount, err = strconv.Atoi(args[2])
+		if err != nil || amount <= 0 {
+			fmt.Fprintf(a.stderr, "parse amount: %v\n", err)
+			return 1
+		}
+	}
+	if len(args) == 4 {
+		advance, err = strconv.Atoi(args[3])
+		if err != nil || advance <= 0 {
+			fmt.Fprintf(a.stderr, "parse advance: %v\n", err)
+			return 1
+		}
+	}
+
+	chain, err := blockchain.OpenBlockchain(a.cfg.DataDir)
+	if err != nil {
+		if errors.Is(err, blockchain.ErrBlockchainNotInitialized) {
+			fmt.Fprintln(a.stderr, "blockchain not initialized; run createblockchain first")
+			return 1
+		}
+		fmt.Fprintf(a.stderr, "open blockchain: %v\n", err)
+		return 1
+	}
+	defer chain.Close()
+
+	wallets, err := wallet.NewWallets(a.cfg.DataDir)
+	if err != nil {
+		fmt.Fprintf(a.stderr, "load wallets: %v\n", err)
+		return 1
+	}
+	fromWallet, ok := wallets.GetWallet(args[0])
+	if !ok {
+		fmt.Fprintln(a.stderr, "sender wallet not found")
+		return 1
+	}
+
+	tx, err := chain.SendTransaction(fromWallet, args[1], amount, 0)
+	if err != nil {
+		fmt.Fprintf(a.stderr, "queue tx for reorg demo: %v\n", err)
+		return 1
+	}
+	block, _, err := chain.MineMempool(args[0])
+	if err != nil {
+		fmt.Fprintf(a.stderr, "mine tx before reorg: %v\n", err)
+		return 1
+	}
+
+	blocks, err := chain.Blocks()
+	if err != nil {
+		fmt.Fprintf(a.stderr, "read chain: %v\n", err)
+		return 1
+	}
+	genesis := blocks[len(blocks)-1]
+	current, err := chain.CurrentBlock()
+	if err != nil {
+		fmt.Fprintf(a.stderr, "current block: %v\n", err)
+		return 1
+	}
+
+	targetHeight := current.Height + advance
+	prevHash := append([]byte(nil), genesis.Hash...)
+	for height := 1; height <= targetHeight; height++ {
+		forkBlock := blockchain.NewBlock(
+			[]blockchain.Transaction{blockchain.NewCoinbaseTransaction(args[0], fmt.Sprintf("reorg fork height %d", height))},
+			prevHash,
+			height,
+		)
+		if err := chain.ImportBlock(forkBlock); err != nil {
+			fmt.Fprintf(a.stderr, "import reorg block height=%d: %v\n", height, err)
+			return 1
+		}
+		prevHash = append([]byte(nil), forkBlock.Hash...)
+	}
+
+	pending, err := chain.PendingTransactions()
+	if err != nil {
+		fmt.Fprintf(a.stderr, "pending transactions after reorg: %v\n", err)
+		return 1
+	}
+	restored := false
+	for _, candidate := range pending {
+		if candidate.IDHex() == tx.IDHex() {
+			restored = true
+			break
+		}
+	}
+
+	balance, err := chain.BalanceOf(args[1])
+	if err != nil {
+		fmt.Fprintf(a.stderr, "balance after reorg: %v\n", err)
+		return 1
+	}
+
+	fmt.Fprintf(a.stdout, "mined_block=%s height=%d\n", block.HashHex(), block.Height)
+	fmt.Fprintf(a.stdout, "reorg_tx=%s restored=%t mempool_size=%d\n", tx.IDHex(), restored, len(pending))
+	fmt.Fprintf(a.stdout, "balance_after_reorg[%s]=%d\n", args[1], balance)
+	return 0
+}
+
+func (a App) showReorgStatus(args []string) int {
+	if len(args) != 0 {
+		fmt.Fprintln(a.stderr, "showreorg does not accept extra arguments")
+		return 1
+	}
+
+	chain, err := blockchain.OpenBlockchain(a.cfg.DataDir)
+	if err != nil {
+		if errors.Is(err, blockchain.ErrBlockchainNotInitialized) {
+			fmt.Fprintln(a.stderr, "blockchain not initialized; run createblockchain first")
+			return 1
+		}
+		fmt.Fprintf(a.stderr, "open blockchain: %v\n", err)
+		return 1
+	}
+	defer chain.Close()
+
+	status, err := chain.LastReorgStatus()
+	if err != nil {
+		fmt.Fprintf(a.stderr, "read reorg status: %v\n", err)
+		return 1
+	}
+	if status == nil {
+		fmt.Fprintln(a.stdout, "no reorg has been recorded")
+		return 0
+	}
+
+	fmt.Fprintf(a.stdout, "timestamp=%s\n", status.Timestamp)
+	fmt.Fprintf(a.stdout, "old_height=%d old_tip=%s\n", status.OldHeight, status.OldTip)
+	fmt.Fprintf(a.stdout, "new_height=%d new_tip=%s\n", status.NewHeight, status.NewTip)
+	fmt.Fprintf(a.stdout, "restored_tx=%d dropped_confirmed=%d\n", status.RestoredTxCount, status.DroppedConfirmedCount)
+	return 0
+}
+
+func (a App) showChainEvents(args []string) int {
+	if len(args) > 1 {
+		fmt.Fprintln(a.stderr, "showevents accepts at most one argument: [limit]")
+		return 1
+	}
+
+	limit := 5
+	var err error
+	if len(args) == 1 {
+		limit, err = strconv.Atoi(args[0])
+		if err != nil || limit <= 0 {
+			fmt.Fprintf(a.stderr, "parse limit: %v\n", err)
+			return 1
+		}
+	}
+
+	chain, err := blockchain.OpenBlockchain(a.cfg.DataDir)
+	if err != nil {
+		if errors.Is(err, blockchain.ErrBlockchainNotInitialized) {
+			fmt.Fprintln(a.stderr, "blockchain not initialized; run createblockchain first")
+			return 1
+		}
+		fmt.Fprintf(a.stderr, "open blockchain: %v\n", err)
+		return 1
+	}
+	defer chain.Close()
+
+	events, err := chain.RecentChainEvents(limit)
+	if err != nil {
+		fmt.Fprintf(a.stderr, "read chain events: %v\n", err)
+		return 1
+	}
+	if len(events) == 0 {
+		fmt.Fprintln(a.stdout, "no chain events have been recorded")
+		return 0
+	}
+
+	for index, event := range events {
+		fmt.Fprintf(a.stdout, "[%d] %s kind=%s %s\n", index, event.Timestamp, event.Kind, event.Summary)
+		fmt.Fprintf(a.stdout, "    old_height=%d new_height=%d\n", event.OldHeight, event.NewHeight)
+		fmt.Fprintf(a.stdout, "    old_tip=%s new_tip=%s\n", event.OldTip, event.NewTip)
+	}
 	return 0
 }
 

@@ -42,15 +42,23 @@ import {
   executeCLI,
   fetchBlocks,
   fetchDashboard,
+  fetchMultiSigOutputs,
   fetchNodes,
   fetchPendingTransactions,
   fetchWallets,
+  initializeNodeBlockchain,
   minePending,
+  mineNodePending,
+  queueMultiSigTransaction,
+  queueP2PKTransaction,
+  queueSpendMultiSigTransaction,
   queueTransaction,
+  runNetworkQuickDemo,
   startNode,
   stopNode,
+  submitNodeTransaction,
 } from './api/backend'
-import type { BlockView, CommandResult, DashboardData, NodeStatus, WalletView } from './types'
+import type { BlockView, CommandResult, DashboardData, MultiSigOutputView, NetworkDemoResult, NodeStatus, WalletView } from './types'
 
 type NavItem = {
   label: string
@@ -74,31 +82,59 @@ function App() {
   const [dashboard, setDashboard] = useState<DashboardData | null>(null)
   const [wallets, setWallets] = useState<WalletView[]>([])
   const [blocks, setBlocks] = useState<BlockView[]>([])
+  const [multiSigOutputs, setMultiSigOutputs] = useState<MultiSigOutputView[]>([])
   const [mempool, setMempool] = useState<string[]>([])
   const [nodes, setNodes] = useState<NodeStatus[]>([])
   const [message, setMessage] = useState('')
   const [error, setError] = useState('')
-  const [txForm, setTxForm] = useState({ from: '', to: '', amount: '20', fee: '2' })
+  const [networkDemo, setNetworkDemo] = useState<NetworkDemoResult | null>(null)
+  const [txForm, setTxForm] = useState({
+    template: 'p2pkh' as 'p2pkh' | 'p2pk' | 'multisig',
+    from: '',
+    to: '',
+    recipients: '',
+    required: '2',
+    amount: '20',
+    fee: '2',
+  })
+  const [spendMultiSigForm, setSpendMultiSigForm] = useState({
+    signers: '',
+    sourceTxID: '',
+    out: '0',
+    to: '',
+    amount: '10',
+    fee: '1',
+  })
   const [minerAddress, setMinerAddress] = useState('')
   const [command, setCommand] = useState('')
   const [history, setHistory] = useState<CommandResult[]>([])
   const [nodeForm, setNodeForm] = useState({ address: '127.0.0.1:3010', seed: '', miner: '' })
   const [connectForm, setConnectForm] = useState({ address: '', seed: '' })
+  const [nodeControlForm, setNodeControlForm] = useState({
+    address: '',
+    rewardAddress: '',
+    from: '',
+    to: '',
+    amount: '10',
+    fee: '1',
+  })
 
   const refresh = async () => {
     try {
       setError('')
-      const [dash, walletList, blockList, pending, nodeList] = await Promise.all([
+      const [dash, walletList, blockList, pending, nodeList, multiSigList] = await Promise.all([
         fetchDashboard(),
         fetchWallets(),
         fetchBlocks(),
         fetchPendingTransactions(),
         fetchNodes(),
+        fetchMultiSigOutputs(),
       ])
 
       setDashboard(dash)
       setWallets(walletList)
       setBlocks(blockList)
+      setMultiSigOutputs(multiSigList)
       setMempool(pending)
       setNodes(nodeList)
 
@@ -111,11 +147,37 @@ function App() {
       if (!txForm.to && walletList.length > 1) {
         setTxForm((prev) => ({ ...prev, to: walletList[1].address }))
       }
+      if (!txForm.recipients && walletList.length > 1) {
+        setTxForm((prev) => ({ ...prev, recipients: `${walletList[0].address},${walletList[1].address}` }))
+      }
       if (!nodeForm.miner && walletList.length > 0) {
         setNodeForm((prev) => ({ ...prev, miner: walletList[0].address }))
       }
       if (!connectForm.address && nodeList.length > 0) {
         setConnectForm((prev) => ({ ...prev, address: nodeList[0].address }))
+      }
+      if ((!nodeControlForm.address || !nodeList.some((node) => node.address === nodeControlForm.address)) && nodeList.length > 0) {
+        setNodeControlForm((prev) => ({ ...prev, address: nodeList[0].address }))
+      }
+      if (!nodeControlForm.rewardAddress && walletList.length > 0) {
+        setNodeControlForm((prev) => ({ ...prev, rewardAddress: walletList[0].address }))
+      }
+      if (!nodeControlForm.from && walletList.length > 0) {
+        setNodeControlForm((prev) => ({ ...prev, from: walletList[0].address }))
+      }
+      if (!nodeControlForm.to && walletList.length > 1) {
+        setNodeControlForm((prev) => ({ ...prev, to: walletList[1].address }))
+      }
+      if (!spendMultiSigForm.to && walletList.length > 0) {
+        setSpendMultiSigForm((prev) => ({ ...prev, to: walletList[0].address }))
+      }
+      if (!spendMultiSigForm.sourceTxID && multiSigList.length > 0) {
+        setSpendMultiSigForm((prev) => ({
+          ...prev,
+          sourceTxID: multiSigList[0].txid,
+          out: String(multiSigList[0].out),
+          signers: multiSigList[0].participants.join(','),
+        }))
       }
     } catch (err) {
       setError(String(err))
@@ -138,25 +200,61 @@ function App() {
           mode,
           ...(mode === 'dark'
             ? {
-                background: { default: '#0b1020', paper: '#121a2b' },
+                background: { default: '#0d1117', paper: '#161b22' },
               }
             : {
-                background: { default: '#f5f7fb', paper: '#ffffff' },
+                background: { default: '#f3f4f6', paper: '#ffffff' },
               }),
         },
-        shape: { borderRadius: 14 },
+        shape: { borderRadius: 2 },
         components: {
           MuiCard: {
             styleOverrides: {
               root: {
-                borderRadius: 18,
+                borderRadius: 2,
+                borderWidth: 1,
+                boxShadow: 'none',
               },
             },
           },
           MuiPaper: {
             styleOverrides: {
               root: {
-                borderRadius: 18,
+                borderRadius: 2,
+              },
+            },
+          },
+          MuiButton: {
+            styleOverrides: {
+              root: {
+                borderRadius: 2,
+                textTransform: 'none',
+                fontWeight: 600,
+                boxShadow: 'none',
+              },
+            },
+          },
+          MuiChip: {
+            styleOverrides: {
+              root: {
+                borderRadius: 2,
+              },
+            },
+          },
+          MuiOutlinedInput: {
+            styleOverrides: {
+              root: {
+                borderRadius: 2,
+              },
+            },
+          },
+          MuiAccordion: {
+            styleOverrides: {
+              root: {
+                borderRadius: 2,
+                '&:before': {
+                  display: 'none',
+                },
               },
             },
           },
@@ -181,7 +279,20 @@ function App() {
   const handleQueueTransaction = async () => {
     try {
       setError('')
-      const txid = await queueTransaction(txForm.from, txForm.to, Number(txForm.amount), Number(txForm.fee || '0'))
+      let txid = ''
+      if (txForm.template === 'p2pk') {
+        txid = await queueP2PKTransaction(txForm.from, txForm.to, Number(txForm.amount), Number(txForm.fee || '0'))
+      } else if (txForm.template === 'multisig') {
+        txid = await queueMultiSigTransaction(
+          txForm.from,
+          txForm.recipients,
+          Number(txForm.required || '0'),
+          Number(txForm.amount),
+          Number(txForm.fee || '0'),
+        )
+      } else {
+        txid = await queueTransaction(txForm.from, txForm.to, Number(txForm.amount), Number(txForm.fee || '0'))
+      }
       setMessage(`交易已进入 Mempool：${txid}`)
       await refresh()
     } catch (err) {
@@ -251,6 +362,75 @@ function App() {
     }
   }
 
+  const handleInitializeNodeBlockchain = async () => {
+    try {
+      setError('')
+      await initializeNodeBlockchain(nodeControlForm.address, nodeControlForm.rewardAddress)
+      setMessage(`节点区块链已就绪：${nodeControlForm.address}`)
+      await refresh()
+    } catch (err) {
+      setError(String(err))
+    }
+  }
+
+  const handleSubmitNodeTransaction = async () => {
+    try {
+      setError('')
+      const txid = await submitNodeTransaction(
+        nodeControlForm.address,
+        nodeControlForm.from,
+        nodeControlForm.to,
+        Number(nodeControlForm.amount),
+        Number(nodeControlForm.fee || '0'),
+      )
+      setMessage(`节点交易已进入 Mempool：${txid}`)
+      await refresh()
+    } catch (err) {
+      setError(String(err))
+    }
+  }
+
+  const handleMineNode = async () => {
+    try {
+      setError('')
+      const hash = await mineNodePending(nodeControlForm.address)
+      setMessage(`节点已挖出新区块：${hash}`)
+      await refresh()
+    } catch (err) {
+      setError(String(err))
+    }
+  }
+
+  const handleRunNetworkQuickDemo = async () => {
+    try {
+      setError('')
+      const result = await runNetworkQuickDemo()
+      setNetworkDemo(result)
+      setMessage(`网络演示已完成：${result.sourceNode} -> ${result.peerNode}`)
+      await refresh()
+    } catch (err) {
+      setError(String(err))
+    }
+  }
+
+  const handleSpendMultiSig = async () => {
+    try {
+      setError('')
+      const txid = await queueSpendMultiSigTransaction(
+        spendMultiSigForm.signers,
+        spendMultiSigForm.sourceTxID,
+        Number(spendMultiSigForm.out),
+        spendMultiSigForm.to,
+        Number(spendMultiSigForm.amount),
+        Number(spendMultiSigForm.fee || '0'),
+      )
+      setMessage(`多签花费交易已进入 Mempool：${txid}`)
+      await refresh()
+    } catch (err) {
+      setError(String(err))
+    }
+  }
+
   return (
     <ThemeProvider theme={theme}>
       <CssBaseline />
@@ -283,13 +463,16 @@ function App() {
               variant="outlined"
               sx={{
                 p: { xs: 2, md: 2.5 },
-                backgroundImage:
-                  mode === 'dark'
-                    ? 'linear-gradient(135deg, rgba(59,130,246,0.12), rgba(16,185,129,0.08))'
-                    : 'linear-gradient(135deg, rgba(59,130,246,0.10), rgba(16,185,129,0.10))',
+                backgroundImage: 'none',
+                borderRadius: 0.5,
+                borderColor: 'divider',
               }}
             >
-              <Stack direction={{ xs: 'column', lg: 'row' }} spacing={2} justifyContent="space-between" alignItems={{ xs: 'flex-start', lg: 'center' }}>
+              <Stack
+                direction={{ xs: 'column', lg: 'row' }}
+                spacing={2}
+                sx={{ justifyContent: 'space-between', alignItems: { xs: 'flex-start', lg: 'center' } }}
+              >
                 <Stack spacing={1}>
                   <Typography variant="h5" sx={{ fontWeight: 700 }}>
                     区块链仿真系统桌面演示层
@@ -298,11 +481,12 @@ function App() {
                     当前 GUI 直接调用真实 Go 后端，适合课堂演示钱包生成、交易流转、出块、节点联通和命令行能力。
                   </Typography>
                 </Stack>
-                <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} flexWrap="wrap" useFlexGap>
+                <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} useFlexGap sx={{ flexWrap: 'wrap' }}>
                   <Chip label={`高度 ${dashboard?.height ?? '-'}`} color="primary" variant="outlined" />
                   <Chip label={`钱包 ${wallets.length}`} color="secondary" variant="outlined" />
                   <Chip label={`Mempool ${mempool.length}`} variant="outlined" />
                   <Chip label={`节点 ${nodes.length}`} variant="outlined" />
+                  {dashboard?.lastReorg ? <Chip label={`最近重组 ${dashboard.lastReorg.newHeight}`} color="warning" variant="outlined" /> : null}
                 </Stack>
               </Stack>
             </Paper>
@@ -332,7 +516,7 @@ function App() {
                         justifyContent: 'flex-start',
                         textAlign: 'left',
                         minHeight: 48,
-                        borderRadius: 2,
+                        borderRadius: 0.5,
                       },
                     }}
                   >
@@ -340,7 +524,7 @@ function App() {
                       <Tab key={item.label} icon={item.icon} iconPosition="start" label={item.label} />
                     ))}
                   </Tabs>
-                  <Paper variant="outlined" sx={{ p: 1.5, mx: 0.5 }}>
+                  <Paper variant="outlined" sx={{ p: 1.25, mx: 0.5, borderRadius: 0.5, bgcolor: 'background.paper' }}>
                     <Typography variant="caption" color="text.secondary">
                       数据目录
                     </Typography>
@@ -354,7 +538,14 @@ function App() {
               <Stack spacing={2.5} sx={{ minWidth: 0 }}>
                 <Card variant="outlined" sx={{ display: tab === 0 ? 'block' : 'none' }}>
                   <CardContent>
-                    <DashboardPage dashboard={dashboard} latestBlock={latestBlock} />
+                    <DashboardPage
+                      dashboard={dashboard}
+                      latestBlock={latestBlock}
+                      wallets={wallets}
+                      mempool={mempool}
+                      multiSigOutputs={multiSigOutputs}
+                      nodes={nodes}
+                    />
                   </CardContent>
                 </Card>
 
@@ -375,10 +566,14 @@ function App() {
                     <TransactionsPage
                       txForm={txForm}
                       setTxForm={setTxForm}
+                      spendMultiSigForm={spendMultiSigForm}
+                      setSpendMultiSigForm={setSpendMultiSigForm}
+                      multiSigOutputs={multiSigOutputs}
                       minerAddress={minerAddress}
                       setMinerAddress={setMinerAddress}
                       mempool={mempool}
                       onQueueTransaction={handleQueueTransaction}
+                      onSpendMultiSig={handleSpendMultiSig}
                       onMine={handleMine}
                     />
                   </CardContent>
@@ -388,13 +583,23 @@ function App() {
                   <CardContent>
                     <NetworkPage
                       nodes={nodes}
+                      wallets={wallets}
+                      networkDemo={networkDemo}
+                      lastReorg={dashboard?.lastReorg ?? null}
+                      recentEvents={dashboard?.recentEvents ?? []}
                       nodeForm={nodeForm}
                       setNodeForm={setNodeForm}
                       connectForm={connectForm}
                       setConnectForm={setConnectForm}
+                      nodeControlForm={nodeControlForm}
+                      setNodeControlForm={setNodeControlForm}
                       onStartNode={handleStartNode}
                       onStopNode={handleStopNode}
                       onConnectNode={handleConnectNode}
+                      onInitializeNodeBlockchain={handleInitializeNodeBlockchain}
+                      onSubmitNodeTransaction={handleSubmitNodeTransaction}
+                      onMineNode={handleMineNode}
+                      onRunNetworkQuickDemo={handleRunNetworkQuickDemo}
                     />
                   </CardContent>
                 </Card>
@@ -413,7 +618,7 @@ function App() {
             </Box>
 
             <Paper variant="outlined" sx={{ p: 1.5 }}>
-              <Stack direction={{ xs: 'column', md: 'row' }} spacing={1.5} justifyContent="space-between">
+              <Stack direction={{ xs: 'column', md: 'row' }} spacing={1.5} sx={{ justifyContent: 'space-between' }}>
                 <Typography variant="body2" color="text.secondary">
                   最新区块：{latestBlock?.hash ?? '尚未初始化'}
                 </Typography>

@@ -3,6 +3,7 @@ export namespace gui {
 	export class OutputView {
 	    to: string;
 	    value: number;
+	    scriptPubKey: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new OutputView(source);
@@ -12,12 +13,14 @@ export namespace gui {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.to = source["to"];
 	        this.value = source["value"];
+	        this.scriptPubKey = source["scriptPubKey"];
 	    }
 	}
 	export class InputView {
 	    txid: string;
 	    out: number;
 	    source: string;
+	    scriptSig: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new InputView(source);
@@ -28,11 +31,14 @@ export namespace gui {
 	        this.txid = source["txid"];
 	        this.out = source["out"];
 	        this.source = source["source"];
+	        this.scriptSig = source["scriptSig"];
 	    }
 	}
 	export class TransactionView {
 	    id: string;
+	    version: number;
 	    fee: number;
+	    usesScriptVM: boolean;
 	    inputs: InputView[];
 	    outputs: OutputView[];
 	
@@ -43,7 +49,9 @@ export namespace gui {
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.id = source["id"];
+	        this.version = source["version"];
 	        this.fee = source["fee"];
+	        this.usesScriptVM = source["usesScriptVM"];
 	        this.inputs = this.convertValues(source["inputs"], InputView);
 	        this.outputs = this.convertValues(source["outputs"], OutputView);
 	    }
@@ -114,6 +122,34 @@ export namespace gui {
 		    return a;
 		}
 	}
+	export class ChainEventView {
+	    timestamp: string;
+	    kind: string;
+	    summary: string;
+	    oldHeight: number;
+	    newHeight: number;
+	    oldTip: string;
+	    newTip: string;
+	    restoredTxCount: number;
+	    droppedConfirmedCount: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new ChainEventView(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.timestamp = source["timestamp"];
+	        this.kind = source["kind"];
+	        this.summary = source["summary"];
+	        this.oldHeight = source["oldHeight"];
+	        this.newHeight = source["newHeight"];
+	        this.oldTip = source["oldTip"];
+	        this.newTip = source["newTip"];
+	        this.restoredTxCount = source["restoredTxCount"];
+	        this.droppedConfirmedCount = source["droppedConfirmedCount"];
+	    }
+	}
 	export class CommandResult {
 	    command: string;
 	    stdout: string;
@@ -132,6 +168,30 @@ export namespace gui {
 	        this.exitCode = source["exitCode"];
 	    }
 	}
+	export class ReorgStatusView {
+	    timestamp: string;
+	    oldHeight: number;
+	    newHeight: number;
+	    oldTip: string;
+	    newTip: string;
+	    restoredTxCount: number;
+	    droppedConfirmedCount: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new ReorgStatusView(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.timestamp = source["timestamp"];
+	        this.oldHeight = source["oldHeight"];
+	        this.newHeight = source["newHeight"];
+	        this.oldTip = source["oldTip"];
+	        this.newTip = source["newTip"];
+	        this.restoredTxCount = source["restoredTxCount"];
+	        this.droppedConfirmedCount = source["droppedConfirmedCount"];
+	    }
+	}
 	export class DashboardData {
 	    height: number;
 	    latestHash: string;
@@ -142,6 +202,8 @@ export namespace gui {
 	    walletCount: number;
 	    dataDir: string;
 	    networkMode: string;
+	    lastReorg?: ReorgStatusView;
+	    recentEvents: ChainEventView[];
 	
 	    static createFrom(source: any = {}) {
 	        return new DashboardData(source);
@@ -158,15 +220,103 @@ export namespace gui {
 	        this.walletCount = source["walletCount"];
 	        this.dataDir = source["dataDir"];
 	        this.networkMode = source["networkMode"];
+	        this.lastReorg = this.convertValues(source["lastReorg"], ReorgStatusView);
+	        this.recentEvents = this.convertValues(source["recentEvents"], ChainEventView);
 	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
 	}
 	
+	export class MultiSigOutputView {
+	    txid: string;
+	    out: number;
+	    value: number;
+	    required: number;
+	    participants: string[];
+	    scriptPubKey: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new MultiSigOutputView(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.txid = source["txid"];
+	        this.out = source["out"];
+	        this.value = source["value"];
+	        this.required = source["required"];
+	        this.participants = source["participants"];
+	        this.scriptPubKey = source["scriptPubKey"];
+	    }
+	}
+	export class NetworkDemoResult {
+	    sourceNode: string;
+	    peerNode: string;
+	    minerAddress: string;
+	    receiverAddress: string;
+	    txid: string;
+	    blockHash: string;
+	    peerHeight: number;
+	    tipAnnounced: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new NetworkDemoResult(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.sourceNode = source["sourceNode"];
+	        this.peerNode = source["peerNode"];
+	        this.minerAddress = source["minerAddress"];
+	        this.receiverAddress = source["receiverAddress"];
+	        this.txid = source["txid"];
+	        this.blockHash = source["blockHash"];
+	        this.peerHeight = source["peerHeight"];
+	        this.tipAnnounced = source["tipAnnounced"];
+	    }
+	}
+	export class NodeEventView {
+	    timestamp: string;
+	    kind: string;
+	    detail: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new NodeEventView(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.timestamp = source["timestamp"];
+	        this.kind = source["kind"];
+	        this.detail = source["detail"];
+	    }
+	}
 	export class NodeStatus {
 	    address: string;
 	    minerAddress: string;
 	    peers: string[];
+	    initialized: boolean;
 	    height: number;
+	    mempoolCount: number;
 	    running: boolean;
+	    orphanCount: number;
+	    recentEvents: NodeEventView[];
 	
 	    static createFrom(source: any = {}) {
 	        return new NodeStatus(source);
@@ -177,15 +327,39 @@ export namespace gui {
 	        this.address = source["address"];
 	        this.minerAddress = source["minerAddress"];
 	        this.peers = source["peers"];
+	        this.initialized = source["initialized"];
 	        this.height = source["height"];
+	        this.mempoolCount = source["mempoolCount"];
 	        this.running = source["running"];
+	        this.orphanCount = source["orphanCount"];
+	        this.recentEvents = this.convertValues(source["recentEvents"], NodeEventView);
 	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
 	}
+	
 	
 	
 	export class WalletView {
 	    address: string;
 	    balance: number;
+	    lockingScript: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new WalletView(source);
@@ -195,6 +369,7 @@ export namespace gui {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.address = source["address"];
 	        this.balance = source["balance"];
+	        this.lockingScript = source["lockingScript"];
 	    }
 	}
 

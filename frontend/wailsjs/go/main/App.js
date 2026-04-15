@@ -22,8 +22,20 @@ export function ExecuteCLI(arg1) {
   return window['go']['main']['App']['ExecuteCLI'](arg1);
 }
 
+export function InitializeNodeBlockchain(arg1, arg2) {
+  return window['go']['main']['App']['InitializeNodeBlockchain'](arg1, arg2);
+}
+
+export function MineNodePending(arg1) {
+  return window['go']['main']['App']['MineNodePending'](arg1);
+}
+
 export function MinePending(arg1) {
   return window['go']['main']['App']['MinePending'](arg1);
+}
+
+export function MultiSigOutputs() {
+  return window['go']['main']['App']['MultiSigOutputs']();
 }
 
 export function Nodes() {
@@ -34,8 +46,24 @@ export function PendingTransactions() {
   return window['go']['main']['App']['PendingTransactions']();
 }
 
+export function QueueMultiSigTransaction(arg1, arg2, arg3, arg4, arg5) {
+  return window['go']['main']['App']['QueueMultiSigTransaction'](arg1, arg2, arg3, arg4, arg5);
+}
+
+export function QueueP2PKTransaction(arg1, arg2, arg3, arg4) {
+  return window['go']['main']['App']['QueueP2PKTransaction'](arg1, arg2, arg3, arg4);
+}
+
+export function QueueSpendMultiSigTransaction(arg1, arg2, arg3, arg4, arg5, arg6) {
+  return window['go']['main']['App']['QueueSpendMultiSigTransaction'](arg1, arg2, arg3, arg4, arg5, arg6);
+}
+
 export function QueueTransaction(arg1, arg2, arg3, arg4) {
   return window['go']['main']['App']['QueueTransaction'](arg1, arg2, arg3, arg4);
+}
+
+export function RunNetworkQuickDemo() {
+  return window['go']['main']['App']['RunNetworkQuickDemo']();
 }
 
 export function StartNode(arg1, arg2, arg3) {
@@ -44,6 +72,10 @@ export function StartNode(arg1, arg2, arg3) {
 
 export function StopNode(arg1) {
   return window['go']['main']['App']['StopNode'](arg1);
+}
+
+export function SubmitNodeTransaction(arg1, arg2, arg3, arg4, arg5) {
+  return window['go']['main']['App']['SubmitNodeTransaction'](arg1, arg2, arg3, arg4, arg5);
 }
 
 export function Wallets() {

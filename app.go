@@ -44,6 +44,22 @@ func (a *App) QueueTransaction(from, to string, amount int, fee int) (string, er
 	return a.service.QueueTransaction(from, to, amount, fee)
 }
 
+func (a *App) QueueP2PKTransaction(from, to string, amount int, fee int) (string, error) {
+	return a.service.QueueP2PKTransaction(from, to, amount, fee)
+}
+
+func (a *App) QueueMultiSigTransaction(from, recipientsCSV string, required int, amount int, fee int) (string, error) {
+	return a.service.QueueMultiSigTransaction(from, recipientsCSV, required, amount, fee)
+}
+
+func (a *App) MultiSigOutputs() ([]gui.MultiSigOutputView, error) {
+	return a.service.MultiSigOutputs()
+}
+
+func (a *App) QueueSpendMultiSigTransaction(signersCSV, sourceTxID string, out int, to string, amount int, fee int) (string, error) {
+	return a.service.QueueSpendMultiSigTransaction(signersCSV, sourceTxID, out, to, amount, fee)
+}
+
 func (a *App) MinePending(minerAddress string) (string, error) {
 	return a.service.MinePending(minerAddress)
 }
@@ -66,4 +82,20 @@ func (a *App) Nodes() ([]gui.NodeStatus, error) {
 
 func (a *App) ConnectNode(address, seed string) error {
 	return a.service.ConnectNode(address, seed)
+}
+
+func (a *App) InitializeNodeBlockchain(address, rewardAddress string) error {
+	return a.service.InitializeNodeBlockchain(address, rewardAddress)
+}
+
+func (a *App) SubmitNodeTransaction(nodeAddress, from, to string, amount int, fee int) (string, error) {
+	return a.service.SubmitNodeTransaction(nodeAddress, from, to, amount, fee)
+}
+
+func (a *App) MineNodePending(address string) (string, error) {
+	return a.service.MineNodePending(address)
+}
+
+func (a *App) RunNetworkQuickDemo() (gui.NetworkDemoResult, error) {
+	return a.service.RunNetworkQuickDemo()
 }

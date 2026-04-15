@@ -38,25 +38,29 @@ func (s *Service) Blocks() ([]BlockView, error) {
 			inputs := make([]InputView, 0, len(tx.Inputs))
 			for _, input := range tx.Inputs {
 				inputs = append(inputs, InputView{
-					TxID:   input.TxIDHex(),
-					Out:    input.Out,
-					Source: input.FromDisplay(),
+					TxID:      input.TxIDHex(),
+					Out:       input.Out,
+					Source:    input.FromDisplay(),
+					ScriptSig: input.EffectiveScriptSig().String(),
 				})
 			}
 
 			outputs := make([]OutputView, 0, len(tx.Outputs))
 			for _, output := range tx.Outputs {
 				outputs = append(outputs, OutputView{
-					To:    output.Address(),
-					Value: output.Value,
+					To:           output.Address(),
+					Value:        output.Value,
+					ScriptPubKey: output.EffectiveScriptPubKey().String(),
 				})
 			}
 
 			txViews = append(txViews, TransactionView{
-				ID:      tx.IDHex(),
-				Fee:     tx.Fee(prevTXs),
-				Inputs:  inputs,
-				Outputs: outputs,
+				ID:           tx.IDHex(),
+				Version:      tx.Version,
+				Fee:          tx.Fee(prevTXs),
+				UsesScriptVM: tx.UsesScriptVM(),
+				Inputs:       inputs,
+				Outputs:      outputs,
 			})
 		}
 

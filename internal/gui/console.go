@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
@@ -26,6 +27,14 @@ func (s *Service) ExecuteCLI(commandLine string) (CommandResult, error) {
 		return s.executeStopNodeFromConsole(args)
 	case "connectnode":
 		return s.executeConnectNodeFromConsole(args)
+	case "nodeinit":
+		return s.executeNodeInitFromConsole(args)
+	case "nodesend":
+		return s.executeNodeSendFromConsole(args)
+	case "nodemine":
+		return s.executeNodeMineFromConsole(args)
+	case "runnetdemo":
+		return s.executeRunNetworkDemoFromConsole(args)
 	case "nodes":
 		return s.executeNodesFromConsole(args)
 	}
@@ -66,7 +75,6 @@ func (s *Service) executeStartNodeFromConsole(args []string) (CommandResult, err
 	return CommandResult{
 		Command:  strings.Join(args, " "),
 		Stdout:   fmt.Sprintf("node started: %s\n", actualAddress),
-		Stderr:   "",
 		ExitCode: 0,
 	}, nil
 }
@@ -103,6 +111,99 @@ func (s *Service) executeConnectNodeFromConsole(args []string) (CommandResult, e
 	}, nil
 }
 
+func (s *Service) executeNodeInitFromConsole(args []string) (CommandResult, error) {
+	if len(args) != 2 && len(args) != 3 {
+		return CommandResult{}, fmt.Errorf("nodeinit requires: <node-addr> [reward-address]")
+	}
+
+	reward := ""
+	if len(args) == 3 {
+		reward = args[2]
+	}
+	if err := s.InitializeNodeBlockchain(args[1], reward); err != nil {
+		return CommandResult{}, err
+	}
+
+	return CommandResult{
+		Command:  strings.Join(args, " "),
+		Stdout:   fmt.Sprintf("node chain ready: %s\n", args[1]),
+		ExitCode: 0,
+	}, nil
+}
+
+func (s *Service) executeNodeSendFromConsole(args []string) (CommandResult, error) {
+	if len(args) != 5 && len(args) != 6 {
+		return CommandResult{}, fmt.Errorf("nodesend requires: <node-addr> <from> <to> <amount> [fee]")
+	}
+
+	amount, err := strconv.Atoi(args[4])
+	if err != nil {
+		return CommandResult{}, fmt.Errorf("parse amount: %w", err)
+	}
+	fee := 0
+	if len(args) == 6 {
+		fee, err = strconv.Atoi(args[5])
+		if err != nil {
+			return CommandResult{}, fmt.Errorf("parse fee: %w", err)
+		}
+	}
+
+	txid, err := s.SubmitNodeTransaction(args[1], args[2], args[3], amount, fee)
+	if err != nil {
+		return CommandResult{}, err
+	}
+
+	return CommandResult{
+		Command:  strings.Join(args, " "),
+		Stdout:   fmt.Sprintf("node transaction queued: %s\n", txid),
+		ExitCode: 0,
+	}, nil
+}
+
+func (s *Service) executeNodeMineFromConsole(args []string) (CommandResult, error) {
+	if len(args) != 2 {
+		return CommandResult{}, fmt.Errorf("nodemine requires: <node-addr>")
+	}
+
+	hash, err := s.MineNodePending(args[1])
+	if err != nil {
+		return CommandResult{}, err
+	}
+
+	return CommandResult{
+		Command:  strings.Join(args, " "),
+		Stdout:   fmt.Sprintf("node mined block: %s\n", hash),
+		ExitCode: 0,
+	}, nil
+}
+
+func (s *Service) executeRunNetworkDemoFromConsole(args []string) (CommandResult, error) {
+	if len(args) != 1 {
+		return CommandResult{}, fmt.Errorf("runnetdemo does not accept extra arguments")
+	}
+
+	result, err := s.RunNetworkQuickDemo()
+	if err != nil {
+		return CommandResult{}, err
+	}
+
+	return CommandResult{
+		Command: strings.Join(args, " "),
+		Stdout: fmt.Sprintf(
+			"network demo ready\nsource=%s\npeer=%s\nminer=%s\nreceiver=%s\ntxid=%s\nblock=%s\npeerHeight=%d\ntipAnnounced=%t\n",
+			result.SourceNode,
+			result.PeerNode,
+			result.MinerAddress,
+			result.ReceiverAddress,
+			result.TxID,
+			result.BlockHash,
+			result.PeerHeight,
+			result.TipAnnounced,
+		),
+		ExitCode: 0,
+	}, nil
+}
+
 func (s *Service) executeNodesFromConsole(args []string) (CommandResult, error) {
 	if len(args) != 1 {
 		return CommandResult{}, fmt.Errorf("nodes does not accept extra arguments")
@@ -122,7 +223,16 @@ func (s *Service) executeNodesFromConsole(args []string) (CommandResult, error) 
 
 	var stdout strings.Builder
 	for _, node := range nodes {
-		fmt.Fprintf(&stdout, "address=%s height=%d miner=%s peers=%s\n", node.Address, node.Height, fallbackText(node.MinerAddress, "(none)"), strings.Join(node.Peers, ","))
+		fmt.Fprintf(
+			&stdout,
+			"address=%s initialized=%t height=%d mempool=%d miner=%s peers=%s\n",
+			node.Address,
+			node.Initialized,
+			node.Height,
+			node.MempoolCount,
+			fallbackText(node.MinerAddress, "(none)"),
+			strings.Join(node.Peers, ","),
+		)
 	}
 
 	return CommandResult{
