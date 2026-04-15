@@ -367,16 +367,28 @@ function App() {
   };
 
   const handleExecuteCommand = async () => {
-    if (!command.trim()) {
+    await handleRunCommand(command, true);
+  };
+
+  const handleRunCommand = async (
+    commandLine: string,
+    clearInput = false,
+  ) => {
+    if (!commandLine.trim()) {
       return;
     }
 
     try {
       setError('');
-      const result = await executeCLI(command);
+      if (!clearInput) {
+        setCommand(commandLine);
+      }
+      const result = await executeCLI(commandLine);
       setHistory((prev) => [result, ...prev].slice(0, 20));
       setMessage(`命令执行完成：${result.command}`);
-      setCommand('');
+      if (clearInput) {
+        setCommand('');
+      }
       await refresh();
     } catch (err) {
       setError(String(err));
@@ -728,7 +740,11 @@ function App() {
                       command={command}
                       setCommand={setCommand}
                       history={history}
+                      wallets={wallets}
+                      nodes={nodes}
+                      multiSigOutputs={multiSigOutputs}
                       onExecute={handleExecuteCommand}
+                      onRunCommand={handleRunCommand}
                     />
                   </CardContent>
                 </Card>

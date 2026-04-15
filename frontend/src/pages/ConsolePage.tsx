@@ -1,14 +1,61 @@
-import { Button, Card, CardContent, Paper, Stack, TextField, Typography } from '@mui/material'
-import type { CommandResult } from '../types'
+import { useMemo } from 'react'
+import {
+  Button,
+  Card,
+  CardContent,
+  Chip,
+  Paper,
+  Stack,
+  TextField,
+  Typography,
+} from '@mui/material'
+import CommandPresetGroupCard from '../components/console/CommandPresetGroupCard'
+import type {
+  CommandResult,
+  MultiSigOutputView,
+  NodeStatus,
+  WalletView,
+} from '../types'
+import {
+  buildConsolePresetGroups,
+  uniqueRecentCommands,
+} from '../utils/consolePresets'
 
 type ConsolePageProps = {
   command: string
   setCommand: React.Dispatch<React.SetStateAction<string>>
   history: CommandResult[]
+  wallets: WalletView[]
+  nodes: NodeStatus[]
+  multiSigOutputs: MultiSigOutputView[]
   onExecute: () => Promise<void>
+  onRunCommand: (commandLine: string) => Promise<void>
 }
 
-function ConsolePage({ command, setCommand, history, onExecute }: ConsolePageProps) {
+function ConsolePage({
+  command,
+  setCommand,
+  history,
+  wallets,
+  nodes,
+  multiSigOutputs,
+  onExecute,
+  onRunCommand,
+}: ConsolePageProps) {
+  const presetGroups = useMemo(
+    () =>
+      buildConsolePresetGroups({
+        wallets,
+        nodes,
+        multiSigOutputs,
+      }),
+    [multiSigOutputs, nodes, wallets],
+  )
+  const recentCommands = useMemo(
+    () => uniqueRecentCommands(history.map((item) => item.command)),
+    [history],
+  )
+
   return (
     <Stack spacing={2}>
       <Card variant="outlined">
@@ -29,8 +76,67 @@ function ConsolePage({ command, setCommand, history, onExecute }: ConsolePagePro
               执行
             </Button>
           </Stack>
+          <Stack spacing={1.25} sx={{ mt: 2.5 }}>
+            <Typography variant="subtitle2">最近命令</Typography>
+            {recentCommands.length === 0 ? (
+              <Typography variant="body2" color="text.secondary">
+                执行过的命令会显示在这里，方便快速复用。
+              </Typography>
+            ) : (
+              <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: 'wrap' }}>
+                {recentCommands.map((item) => (
+                  <Chip
+                    key={item}
+                    label={item}
+                    variant="outlined"
+                    onClick={() => setCommand(item)}
+                  />
+                ))}
+              </Stack>
+            )}
+          </Stack>
         </CardContent>
       </Card>
+
+      <Stack direction={{ xs: 'column', xl: 'row' }} spacing={2}>
+        <Stack sx={{ flex: 1, minWidth: 0 }}>
+          <CommandPresetGroupCard
+            group={presetGroups[0]}
+            onFillCommand={setCommand}
+            onRunCommand={onRunCommand}
+          />
+        </Stack>
+        <Stack sx={{ flex: 1, minWidth: 0 }}>
+          <CommandPresetGroupCard
+            group={presetGroups[1]}
+            onFillCommand={setCommand}
+            onRunCommand={onRunCommand}
+          />
+        </Stack>
+      </Stack>
+
+      <Stack direction={{ xs: 'column', xl: 'row' }} spacing={2}>
+        <Stack sx={{ flex: 1, minWidth: 0 }}>
+          <CommandPresetGroupCard
+            group={presetGroups[2]}
+            onFillCommand={setCommand}
+            onRunCommand={onRunCommand}
+          />
+        </Stack>
+        <Stack sx={{ flex: 1, minWidth: 0 }}>
+          <CommandPresetGroupCard
+            group={presetGroups[3]}
+            onFillCommand={setCommand}
+            onRunCommand={onRunCommand}
+          />
+        </Stack>
+      </Stack>
+
+      <CommandPresetGroupCard
+        group={presetGroups[4]}
+        onFillCommand={setCommand}
+        onRunCommand={onRunCommand}
+      />
 
       <Paper
         variant="outlined"
