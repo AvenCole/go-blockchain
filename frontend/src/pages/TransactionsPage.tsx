@@ -48,14 +48,17 @@ function TransactionsPage({
   onMine,
 }: TransactionsPageProps) {
   return (
-    <Box sx={{ display: 'grid', gap: 2, gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' } }}>
+    <Box
+      sx={{
+        display: 'grid',
+        gap: 2,
+        gridTemplateColumns: { xs: '1fr', xl: 'minmax(0, 1fr) minmax(0, 1fr)' },
+      }}
+    >
       <Box>
         <Card variant="outlined">
-          <CardContent sx={{ p: 2 }}>
+          <CardContent sx={{ p: 2.25 }}>
             <Typography variant="h6">发送交易</Typography>
-            <Typography color="text.secondary" sx={{ mt: 1 }}>
-              支持 P2PKH、P2PK 和教学型多重签名输出，发送动作会先进入 mempool。
-            </Typography>
             <Stack spacing={2} sx={{ mt: 2 }}>
               <TextField
                 select
@@ -94,11 +97,8 @@ function TransactionsPage({
       </Box>
       <Box>
         <Card variant="outlined">
-          <CardContent sx={{ p: 2 }}>
+          <CardContent sx={{ p: 2.25 }}>
             <Typography variant="h6">多签花费</Typography>
-            <Typography color="text.secondary" sx={{ mt: 1 }}>
-              选择一个未花费多签输出，并填入按顺序签名的本地钱包地址。
-            </Typography>
             <Stack spacing={2} sx={{ mt: 2 }}>
               <TextField
                 select
@@ -134,9 +134,6 @@ function TransactionsPage({
             </Stack>
             <Divider sx={{ my: 2 }} />
             <Typography variant="h6">挖矿与交易池</Typography>
-            <Typography color="text.secondary" sx={{ mt: 1 }}>
-              指定矿工地址后，当前待打包交易会被统一出块。
-            </Typography>
             <Stack spacing={2} sx={{ mt: 2 }}>
               <TextField label="Miner Address" value={minerAddress} onChange={(e) => setMinerAddress(e.target.value)} />
               <Button variant="contained" color="secondary" onClick={onMine}>打包并挖矿</Button>

@@ -5,10 +5,9 @@ import {
   AppBar,
   Box,
   Button,
-  Card,
-  CardContent,
   Container,
   CssBaseline,
+  Divider,
   IconButton,
   Paper,
   Stack,
@@ -282,38 +281,42 @@ function App() {
   const theme = useMemo(
     () =>
       createTheme({
+        typography: {
+          fontFamily: '"Segoe UI", "Inter", "PingFang SC", sans-serif',
+        },
         palette: {
           mode,
           ...(mode === 'dark'
             ? {
-                background: { default: '#0d1117', paper: '#161b22' },
+                background: { default: '#101216', paper: '#171a20' },
               }
             : {
-                background: { default: '#f3f4f6', paper: '#ffffff' },
+                background: { default: '#eef1f5', paper: '#ffffff' },
               }),
         },
-        shape: { borderRadius: 2 },
+        shape: { borderRadius: 1.5 },
         components: {
           MuiCard: {
             styleOverrides: {
               root: {
-                borderRadius: 2,
+                borderRadius: 1.5,
                 borderWidth: 1,
                 boxShadow: 'none',
+                backgroundImage: 'none',
               },
             },
           },
           MuiPaper: {
             styleOverrides: {
               root: {
-                borderRadius: 2,
+                borderRadius: 1.5,
               },
             },
           },
           MuiButton: {
             styleOverrides: {
               root: {
-                borderRadius: 2,
+                borderRadius: 1.25,
                 textTransform: 'none',
                 fontWeight: 600,
                 boxShadow: 'none',
@@ -330,7 +333,7 @@ function App() {
           MuiOutlinedInput: {
             styleOverrides: {
               root: {
-                borderRadius: 2,
+                borderRadius: 1.25,
               },
             },
           },
@@ -341,6 +344,13 @@ function App() {
                 '&:before': {
                   display: 'none',
                 },
+              },
+            },
+          },
+          MuiTab: {
+            styleOverrides: {
+              root: {
+                minHeight: 44,
               },
             },
           },
@@ -654,7 +664,15 @@ function App() {
           </Toolbar>
         </AppBar>
 
-        <Container maxWidth={false} sx={{ py: 3, px: { xs: 2, md: 3 } }}>
+        <Container
+          maxWidth={false}
+          sx={{
+            py: 2.5,
+            px: { xs: 1.5, md: 2.5 },
+            maxWidth: 1680,
+            mx: 'auto',
+          }}
+        >
           <Stack spacing={2.5}>
             {message ? <Alert severity="success">{message}</Alert> : null}
             {error ? <Alert severity="error">{error}</Alert> : null}
@@ -662,26 +680,49 @@ function App() {
             <Box
               sx={{
                 display: 'grid',
-                gap: 2.5,
-                gridTemplateColumns: { xs: '1fr', xl: '260px minmax(0, 1fr)' },
+                gap: 2,
+                alignItems: 'start',
+                gridTemplateColumns: {
+                  xs: '1fr',
+                  lg: '228px minmax(0, 1fr)',
+                },
               }}
             >
               <Paper
                 variant="outlined"
-                sx={{ p: 1.25, height: 'fit-content', overflow: 'hidden' }}
+                sx={{
+                  p: 1,
+                  position: { lg: 'sticky' },
+                  top: { lg: 88 },
+                  overflow: 'hidden',
+                  borderColor: 'divider',
+                  backgroundImage: 'none',
+                }}
               >
                 <Stack spacing={1.5}>
-                  <Box sx={{ px: 1, pt: 0.5 }}>
-                    <Typography variant="subtitle2" color="text.secondary">
+                  <Box sx={{ px: 1, pt: 0.5, pb: 0.5 }}>
+                    <Typography
+                      variant="overline"
+                      color="text.secondary"
+                      sx={{ letterSpacing: 0.6 }}
+                    >
                       导航
                     </Typography>
+                    <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                      go-blockchain
+                    </Typography>
                   </Box>
+                  <Divider />
                   <Tabs
                     orientation="vertical"
                     value={tab}
                     onChange={(_, value) => setTab(value)}
                     variant="scrollable"
                     sx={{
+                      minHeight: 0,
+                      '& .MuiTabs-indicator': {
+                        display: 'none',
+                      },
                       '& .MuiTabs-flexContainer': {
                         alignItems: 'stretch',
                       },
@@ -689,8 +730,15 @@ function App() {
                         alignItems: 'flex-start',
                         justifyContent: 'flex-start',
                         textAlign: 'left',
-                        minHeight: 48,
-                        borderRadius: 0.5,
+                        minHeight: 44,
+                        px: 1.25,
+                        py: 0.75,
+                        borderRadius: 1,
+                        color: 'text.secondary',
+                      },
+                      '& .MuiTab-root.Mui-selected': {
+                        color: 'text.primary',
+                        bgcolor: 'action.selected',
                       },
                     }}
                   >
@@ -703,34 +751,16 @@ function App() {
                       />
                     ))}
                   </Tabs>
-                  <Paper
-                    variant="outlined"
-                    sx={{
-                      p: 1.25,
-                      mx: 0.5,
-                      borderRadius: 0.5,
-                      bgcolor: 'background.paper',
-                    }}
-                  >
-                    <Typography variant="caption" color="text.secondary">
-                      数据目录
-                    </Typography>
-                    <Typography
-                      variant="body2"
-                      sx={{ mt: 0.5, wordBreak: 'break-all' }}
-                    >
-                      {dashboard?.dataDir ?? '加载中'}
-                    </Typography>
-                  </Paper>
                 </Stack>
               </Paper>
 
               <Stack spacing={2.5} sx={{ minWidth: 0 }}>
-                <Card
-                  variant="outlined"
-                  sx={{ display: tab === 0 ? 'block' : 'none' }}
+                <Box
+                  sx={{
+                    display: tab === 0 ? 'block' : 'none',
+                  }}
                 >
-                  <CardContent>
+                  <Box>
                     <DashboardPage
                       dashboard={dashboard}
                       latestBlock={latestBlock}
@@ -739,35 +769,38 @@ function App() {
                       multiSigOutputs={multiSigOutputs}
                       nodes={nodes}
                     />
-                  </CardContent>
-                </Card>
+                  </Box>
+                </Box>
 
-                <Card
-                  variant="outlined"
-                  sx={{ display: tab === 1 ? 'block' : 'none' }}
+                <Box
+                  sx={{
+                    display: tab === 1 ? 'block' : 'none',
+                  }}
                 >
-                  <CardContent>
+                  <Box>
                     <WalletsPage
                       wallets={wallets}
                       onCreateWallet={handleCreateWallet}
                     />
-                  </CardContent>
-                </Card>
+                  </Box>
+                </Box>
 
-                <Card
-                  variant="outlined"
-                  sx={{ display: tab === 2 ? 'block' : 'none' }}
+                <Box
+                  sx={{
+                    display: tab === 2 ? 'block' : 'none',
+                  }}
                 >
-                  <CardContent>
+                  <Box>
                     <BlocksPage blocks={blocks} />
-                  </CardContent>
-                </Card>
+                  </Box>
+                </Box>
 
-                <Card
-                  variant="outlined"
-                  sx={{ display: tab === 3 ? 'block' : 'none' }}
+                <Box
+                  sx={{
+                    display: tab === 3 ? 'block' : 'none',
+                  }}
                 >
-                  <CardContent>
+                  <Box>
                     <TransactionsPage
                       txForm={txForm}
                       setTxForm={setTxForm}
@@ -781,14 +814,15 @@ function App() {
                       onSpendMultiSig={handleSpendMultiSig}
                       onMine={handleMine}
                     />
-                  </CardContent>
-                </Card>
+                  </Box>
+                </Box>
 
-                <Card
-                  variant="outlined"
-                  sx={{ display: tab === 4 ? 'block' : 'none' }}
+                <Box
+                  sx={{
+                    display: tab === 4 ? 'block' : 'none',
+                  }}
                 >
-                  <CardContent>
+                  <Box>
                     <NetworkPage
                       nodes={nodes}
                       wallets={wallets}
@@ -819,14 +853,15 @@ function App() {
                       busyActions={busyActions}
                       isNodeActionBusy={isNodeActionBusy}
                     />
-                  </CardContent>
-                </Card>
+                  </Box>
+                </Box>
 
-                <Card
-                  variant="outlined"
-                  sx={{ display: tab === 5 ? 'block' : 'none' }}
+                <Box
+                  sx={{
+                    display: tab === 5 ? 'block' : 'none',
+                  }}
                 >
-                  <CardContent>
+                  <Box>
                     <ConsolePage
                       command={command}
                       setCommand={setCommand}
@@ -837,12 +872,12 @@ function App() {
                       onExecute={handleExecuteCommand}
                       onRunCommand={handleRunCommand}
                     />
-                  </CardContent>
-                </Card>
+                  </Box>
+                </Box>
               </Stack>
             </Box>
 
-            <Paper variant="outlined" sx={{ p: 1.5 }}>
+            <Paper variant="outlined" sx={{ px: 1.5, py: 1.25 }}>
               <Stack
                 direction={{ xs: 'column', md: 'row' }}
                 spacing={1.5}

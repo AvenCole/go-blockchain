@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import {
+  Box,
   Button,
   Card,
   CardContent,
@@ -145,15 +146,17 @@ function NetworkPage({
   }, [chainEventKind, chainEventKindOptions])
 
   return (
-    <Stack spacing={2.5}>
-      <Stack direction={{ xs: 'column', xl: 'row' }} spacing={2.5}>
-        <Stack sx={{ flex: 1, minWidth: 0 }}>
-          <Card variant="outlined">
-          <CardContent sx={{ p: 2 }}>
+    <Stack spacing={2}>
+      <Box
+        sx={{
+          display: 'grid',
+          gap: 2,
+          gridTemplateColumns: { xs: '1fr', xl: 'repeat(3, minmax(0, 1fr))' },
+        }}
+      >
+        <Card variant="outlined">
+          <CardContent sx={{ p: 2.25 }}>
             <Typography variant="h6">快速同步场景</Typography>
-            <Typography color="text.secondary" sx={{ mt: 1 }}>
-              自动创建双节点同步流程：准备钱包、启动节点、初始化主节点链、连接 peer、发送交易并挖矿。
-            </Typography>
             <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} sx={{ mt: 2.5, alignItems: { md: 'center' } }}>
               <Button
                 variant="contained"
@@ -176,16 +179,11 @@ function NetworkPage({
               )}
             </Stack>
           </CardContent>
-          </Card>
-        </Stack>
+        </Card>
 
-        <Stack sx={{ flex: 1, minWidth: 0 }}>
-          <Card variant="outlined">
-          <CardContent sx={{ p: 2 }}>
+        <Card variant="outlined">
+          <CardContent sx={{ p: 2.25 }}>
             <Typography variant="h6">分叉 / 重组场景</Typography>
-            <Typography color="text.secondary" sx={{ mt: 1 }}>
-              创建已确认交易后注入更长分叉链，并触发 peer 重新同步，用于检查 reorg 与交易恢复。
-            </Typography>
             <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} sx={{ mt: 2.5, alignItems: { md: 'center' } }}>
               <Button
                 variant="contained"
@@ -212,16 +210,11 @@ function NetworkPage({
               )}
             </Stack>
           </CardContent>
-          </Card>
-        </Stack>
+        </Card>
 
-        <Stack sx={{ flex: 1, minWidth: 0 }}>
-          <Card variant="outlined">
-          <CardContent sx={{ p: 2 }}>
+        <Card variant="outlined">
+          <CardContent sx={{ p: 2.25 }}>
             <Typography variant="h6">三节点分区 / 合流</Typography>
-            <Typography color="text.secondary" sx={{ mt: 1 }}>
-              构造 source、peer、fork 三节点分区，再在合流后检查所有节点是否收敛到同一 tip。
-            </Typography>
             <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} sx={{ mt: 2.5, alignItems: { md: 'center' } }}>
               <Button
                 variant="contained"
@@ -248,13 +241,12 @@ function NetworkPage({
               )}
             </Stack>
           </CardContent>
-          </Card>
-        </Stack>
-      </Stack>
+        </Card>
+      </Box>
 
       <NetworkOperationStatusCard operation={operationProgress} />
 
-      <Stack direction={{ xs: 'column', xl: 'row' }} spacing={2.5}>
+      <Stack direction={{ xs: 'column', xl: 'row' }} spacing={2}>
         <Stack sx={{ flex: 1, minWidth: 0 }}>
           <NetworkTopologyCard
             nodes={nodes}
@@ -267,7 +259,7 @@ function NetworkPage({
         </Stack>
       </Stack>
 
-      <Stack direction={{ xs: 'column', xl: 'row' }} spacing={2.5}>
+      <Stack direction={{ xs: 'column', xl: 'row' }} spacing={2}>
         <Stack sx={{ flex: 0.9, minWidth: 0 }}>
           <NodeDirectoryCard
             nodes={nodes}
@@ -296,7 +288,7 @@ function NetworkPage({
       </Stack>
 
       <Card variant="outlined">
-        <CardContent sx={{ p: 2 }}>
+        <CardContent sx={{ p: 2.25 }}>
           <Typography variant="h6">链切换观测</Typography>
           {lastReorg ? (
             <Stack spacing={0.75} sx={{ mt: 1.5 }}>
@@ -314,7 +306,7 @@ function NetworkPage({
       </Card>
 
       <Card variant="outlined">
-        <CardContent sx={{ p: 2 }}>
+        <CardContent sx={{ p: 2.25 }}>
           <Typography variant="h6">最近链事件</Typography>
           <EventFilterToolbar
             query={chainEventQuery}
@@ -329,10 +321,10 @@ function NetworkPage({
             <Stack spacing={1} sx={{ mt: 1.5 }}>
               {filteredChainEvents.length > 0 ? (
                 filteredChainEvents.map((event, index) => (
-                <Stack key={`${event.timestamp}-${index}`} spacing={0.25}>
-                  <Typography variant="body2">{event.timestamp} · {event.kind}</Typography>
-                  <Typography variant="body2" color="text.secondary">{event.summary}</Typography>
-                </Stack>
+                  <Stack key={`${event.timestamp}-${index}`} spacing={0.25}>
+                    <Typography variant="body2">{event.timestamp} · {event.kind}</Typography>
+                    <Typography variant="body2" color="text.secondary">{event.summary}</Typography>
+                  </Stack>
                 ))
               ) : (
                 <Typography color="text.secondary">
@@ -348,13 +340,10 @@ function NetworkPage({
         </CardContent>
       </Card>
 
-      <Stack direction={{ xs: 'column', xl: 'row' }} spacing={2.5}>
+      <Stack direction={{ xs: 'column', xl: 'row' }} spacing={2}>
         <Card variant="outlined" sx={{ flex: 1 }}>
-          <CardContent sx={{ p: 2 }}>
+          <CardContent sx={{ p: 2.25 }}>
             <Typography variant="h6">启动本地节点</Typography>
-            <Typography color="text.secondary" sx={{ mt: 1 }}>
-              在当前窗口启动 TCP 节点，并设置监听地址、种子节点与矿工地址。
-            </Typography>
             <Stack spacing={2} sx={{ mt: 2.5 }}>
               <TextField
                 fullWidth
@@ -389,11 +378,8 @@ function NetworkPage({
         </Card>
 
         <Card variant="outlined" sx={{ flex: 1 }}>
-          <CardContent sx={{ p: 2 }}>
+          <CardContent sx={{ p: 2.25 }}>
             <Typography variant="h6">连接已有节点</Typography>
-            <Typography color="text.secondary" sx={{ mt: 1 }}>
-              选择一个本地节点并指定种子地址，建立连接。
-            </Typography>
             <Stack spacing={2} sx={{ mt: 2.5 }}>
               <TextField
                 fullWidth
@@ -423,11 +409,8 @@ function NetworkPage({
       </Stack>
 
       <Card variant="outlined">
-        <CardContent sx={{ p: 2 }}>
+        <CardContent sx={{ p: 2.25 }}>
           <Typography variant="h6">节点链控制</Typography>
-          <Typography color="text.secondary" sx={{ mt: 1 }}>
-            对指定节点执行链初始化、交易发送和挖矿。
-          </Typography>
 
           <Stack spacing={2} sx={{ mt: 2.5 }}>
             <TextField

@@ -1,4 +1,4 @@
-import { Card, CardContent, Chip, Stack, Typography } from '@mui/material'
+import { Card, CardContent, Stack, Typography } from '@mui/material'
 import type { ReactNode } from 'react'
 
 type StatCardProps = {
@@ -14,16 +14,28 @@ function StatCard({ title, value, secondary }: StatCardProps) {
       sx={{
         height: '100%',
         backgroundImage: 'none',
-        borderRadius: 0.5,
+        borderRadius: 1,
         borderColor: 'divider',
       }}
     >
-      <CardContent sx={{ p: 1.75 }}>
-        <Stack spacing={1.25}>
-          <Chip label={title} size="small" variant="outlined" sx={{ alignSelf: 'flex-start', fontWeight: 600, borderRadius: 0.5, height: 22 }} />
-          <Typography variant="h5" sx={{ fontWeight: 700, lineHeight: 1.1 }}>{value}</Typography>
+      <CardContent sx={{ p: 2 }}>
+        <Stack spacing={0.9}>
+          <Typography
+            variant="overline"
+            color="text.secondary"
+            sx={{ lineHeight: 1, letterSpacing: 0.7 }}
+          >
+            {title}
+          </Typography>
+          <Typography variant="h4" sx={{ fontWeight: 700, lineHeight: 1.05 }}>
+            {value}
+          </Typography>
           {secondary ? (
-            <Typography variant="caption" color="text.secondary">
+            <Typography
+              variant="body2"
+              color="text.secondary"
+              sx={{ wordBreak: 'break-word' }}
+            >
               {secondary}
             </Typography>
           ) : null}

@@ -8,14 +8,17 @@ type WalletsPageProps = {
 
 function WalletsPage({ wallets, onCreateWallet }: WalletsPageProps) {
   return (
-    <Box sx={{ display: 'grid', gap: 2, gridTemplateColumns: { xs: '1fr', md: 'minmax(280px, 1fr) 2fr' } }}>
+    <Box
+      sx={{
+        display: 'grid',
+        gap: 2,
+        gridTemplateColumns: { xs: '1fr', lg: '320px minmax(0, 1fr)' },
+      }}
+    >
       <Box>
         <Card variant="outlined">
-          <CardContent sx={{ p: 2 }}>
+          <CardContent sx={{ p: 2.25 }}>
             <Typography variant="h6">钱包操作</Typography>
-            <Typography color="text.secondary" sx={{ mt: 1 }}>
-              这里创建的钱包会直接写入真实后端钱包文件。
-            </Typography>
             <Button sx={{ mt: 2 }} fullWidth variant="contained" onClick={onCreateWallet}>
               创建钱包
             </Button>
@@ -24,10 +27,10 @@ function WalletsPage({ wallets, onCreateWallet }: WalletsPageProps) {
       </Box>
       <Box>
         <Card variant="outlined">
-          <CardContent sx={{ p: 2 }}>
+          <CardContent sx={{ p: 2.25 }}>
             <Typography variant="h6">地址与余额</Typography>
             <Stack spacing={1.5} sx={{ mt: 2 }}>
-              {wallets.map((item) => (
+              {wallets.length > 0 ? wallets.map((item) => (
                 <Card key={item.address} variant="outlined" sx={{ borderRadius: 0.5 }}>
                   <CardContent sx={{ p: 1.5 }}>
                     <Typography variant="body2" sx={{ wordBreak: 'break-all' }}>
@@ -43,7 +46,11 @@ function WalletsPage({ wallets, onCreateWallet }: WalletsPageProps) {
                     </Typography>
                   </CardContent>
                 </Card>
-              ))}
+              )) : (
+                <Typography color="text.secondary">
+                  当前还没有钱包。
+                </Typography>
+              )}
             </Stack>
           </CardContent>
         </Card>
