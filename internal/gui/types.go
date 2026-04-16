@@ -152,3 +152,17 @@ type NetworkPartitionDemoResult struct {
 	Restored           bool   `json:"restored"`
 	AllConverged       bool   `json:"allConverged"`
 }
+
+type NetworkOperationProgress struct {
+	Operation   string `json:"operation"`
+	Status      string `json:"status"`
+	Phase       string `json:"phase"`
+	Message     string `json:"message"`
+	CurrentStep int    `json:"currentStep"`
+	TotalSteps  int    `json:"totalSteps"`
+	StartedAt   string `json:"startedAt"`
+	FinishedAt  string `json:"finishedAt,omitempty"`
+	ElapsedMS   int64  `json:"elapsedMs"`
+	Error       string `json:"error,omitempty"`
+	Summary     string `json:"summary,omitempty"`
+}

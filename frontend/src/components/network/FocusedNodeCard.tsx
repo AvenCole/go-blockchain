@@ -24,6 +24,8 @@ type FocusedNodeCardProps = {
   onUseAsSeed: (address: string) => void
   onUseAsControlNode: (address: string) => void
   onStopNode: (address: string) => Promise<void>
+  isStopDisabled: boolean
+  isStopping: boolean
 }
 
 function FocusedNodeCard({
@@ -32,6 +34,8 @@ function FocusedNodeCard({
   onUseAsSeed,
   onUseAsControlNode,
   onStopNode,
+  isStopDisabled,
+  isStopping,
 }: FocusedNodeCardProps) {
   const [eventQuery, setEventQuery] = useState('')
   const [eventKind, setEventKind] = useState('')
@@ -106,8 +110,13 @@ function FocusedNodeCard({
               <Button variant="outlined" color="secondary" onClick={() => onUseAsControlNode(node.address)}>
                 填入链控制
               </Button>
-              <Button variant="outlined" color="error" onClick={() => void onStopNode(node.address)}>
-                停止节点
+              <Button
+                variant="outlined"
+                color="error"
+                disabled={isStopDisabled}
+                onClick={() => void onStopNode(node.address)}
+              >
+                {isStopping ? '停止中...' : '停止节点'}
               </Button>
             </Stack>
 

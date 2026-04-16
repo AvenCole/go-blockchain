@@ -11,12 +11,14 @@ import {
 import FocusedNodeCard from '../components/network/FocusedNodeCard'
 import EventFilterToolbar from '../components/network/EventFilterToolbar'
 import NodeDirectoryCard from '../components/network/NodeDirectoryCard'
+import NetworkOperationStatusCard from '../components/network/NetworkOperationStatusCard'
 import NetworkTimelineCard from '../components/network/NetworkTimelineCard'
 import NetworkTopologyCard from '../components/network/NetworkTopologyCard'
 import type {
   ChainEventView,
   NetworkDemoResult,
   NetworkPartitionDemoResult,
+  NetworkOperationProgress,
   NetworkReorgDemoResult,
   NodeStatus,
   ReorgStatusView,
@@ -49,6 +51,20 @@ type NetworkPageProps = {
   onRunNetworkQuickDemo: () => Promise<void>
   onRunNetworkReorgDemo: () => Promise<void>
   onRunNetworkPartitionDemo: () => Promise<void>
+  operationProgress: NetworkOperationProgress | null
+  isDemoBusy: boolean
+  isNodeActionBusy: boolean
+  busyActions: {
+    startNode: boolean
+    stopNode: boolean
+    connectNode: boolean
+    initializeNodeBlockchain: boolean
+    submitNodeTransaction: boolean
+    mineNode: boolean
+    runNetworkQuickDemo: boolean
+    runNetworkReorgDemo: boolean
+    runNetworkPartitionDemo: boolean
+  }
 }
 
 function NetworkPage({
@@ -74,6 +90,10 @@ function NetworkPage({
   onRunNetworkQuickDemo,
   onRunNetworkReorgDemo,
   onRunNetworkPartitionDemo,
+  operationProgress,
+  isDemoBusy,
+  isNodeActionBusy,
+  busyActions,
 }: NetworkPageProps) {
   const [focusedNodeAddress, setFocusedNodeAddress] = useState('')
   const [chainEventQuery, setChainEventQuery] = useState('')
@@ -127,15 +147,21 @@ function NetworkPage({
   return (
     <Stack spacing={2.5}>
       <Stack direction={{ xs: 'column', xl: 'row' }} spacing={2.5}>
-        <Card variant="outlined" sx={{ flex: 1 }}>
+        <Stack sx={{ flex: 1, minWidth: 0 }}>
+          <Card variant="outlined">
           <CardContent sx={{ p: 2 }}>
             <Typography variant="h6">快速同步场景</Typography>
             <Typography color="text.secondary" sx={{ mt: 1 }}>
               自动创建双节点同步流程：准备钱包、启动节点、初始化主节点链、连接 peer、发送交易并挖矿。
             </Typography>
             <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} sx={{ mt: 2.5, alignItems: { md: 'center' } }}>
-              <Button variant="contained" color="primary" onClick={onRunNetworkQuickDemo}>
-                运行快速同步
+              <Button
+                variant="contained"
+                color="primary"
+                disabled={isDemoBusy}
+                onClick={onRunNetworkQuickDemo}
+              >
+                {busyActions.runNetworkQuickDemo ? '快速同步中...' : '运行快速同步'}
               </Button>
               {networkDemo ? (
                 <Stack spacing={0.5}>
@@ -150,17 +176,24 @@ function NetworkPage({
               )}
             </Stack>
           </CardContent>
-        </Card>
+          </Card>
+        </Stack>
 
-        <Card variant="outlined" sx={{ flex: 1 }}>
+        <Stack sx={{ flex: 1, minWidth: 0 }}>
+          <Card variant="outlined">
           <CardContent sx={{ p: 2 }}>
             <Typography variant="h6">分叉 / 重组场景</Typography>
             <Typography color="text.secondary" sx={{ mt: 1 }}>
               创建已确认交易后注入更长分叉链，并触发 peer 重新同步，用于检查 reorg 与交易恢复。
             </Typography>
             <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} sx={{ mt: 2.5, alignItems: { md: 'center' } }}>
-              <Button variant="contained" color="secondary" onClick={onRunNetworkReorgDemo}>
-                运行重组流程
+              <Button
+                variant="contained"
+                color="secondary"
+                disabled={isDemoBusy}
+                onClick={onRunNetworkReorgDemo}
+              >
+                {busyActions.runNetworkReorgDemo ? '重组流程中...' : '运行重组流程'}
               </Button>
               {networkReorgDemo ? (
                 <Stack spacing={0.5}>
@@ -179,17 +212,24 @@ function NetworkPage({
               )}
             </Stack>
           </CardContent>
-        </Card>
+          </Card>
+        </Stack>
 
-        <Card variant="outlined" sx={{ flex: 1 }}>
+        <Stack sx={{ flex: 1, minWidth: 0 }}>
+          <Card variant="outlined">
           <CardContent sx={{ p: 2 }}>
             <Typography variant="h6">三节点分区 / 合流</Typography>
             <Typography color="text.secondary" sx={{ mt: 1 }}>
               构造 source、peer、fork 三节点分区，再在合流后检查所有节点是否收敛到同一 tip。
             </Typography>
             <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} sx={{ mt: 2.5, alignItems: { md: 'center' } }}>
-              <Button variant="contained" color="inherit" onClick={onRunNetworkPartitionDemo}>
-                运行分区流程
+              <Button
+                variant="contained"
+                color="inherit"
+                disabled={isDemoBusy}
+                onClick={onRunNetworkPartitionDemo}
+              >
+                {busyActions.runNetworkPartitionDemo ? '分区流程中...' : '运行分区流程'}
               </Button>
               {networkPartitionDemo ? (
                 <Stack spacing={0.5}>
@@ -208,8 +248,11 @@ function NetworkPage({
               )}
             </Stack>
           </CardContent>
-        </Card>
+          </Card>
+        </Stack>
       </Stack>
+
+      <NetworkOperationStatusCard operation={operationProgress} />
 
       <Stack direction={{ xs: 'column', xl: 'row' }} spacing={2.5}>
         <Stack sx={{ flex: 1, minWidth: 0 }}>
@@ -246,6 +289,8 @@ function NetworkPage({
               setNodeControlForm((prev) => ({ ...prev, address }))
             }
             onStopNode={onStopNode}
+            isStopDisabled={isDemoBusy || isNodeActionBusy}
+            isStopping={busyActions.stopNode}
           />
         </Stack>
       </Stack>
@@ -332,8 +377,12 @@ function NetworkPage({
                 onChange={(e) => setNodeForm((p) => ({ ...p, miner: e.target.value }))}
                 placeholder="可选，不填则只做普通节点"
               />
-              <Button variant="contained" onClick={onStartNode}>
-                启动节点
+              <Button
+                variant="contained"
+                disabled={isDemoBusy || isNodeActionBusy}
+                onClick={onStartNode}
+              >
+                {busyActions.startNode ? '启动中...' : '启动节点'}
               </Button>
             </Stack>
           </CardContent>
@@ -360,8 +409,13 @@ function NetworkPage({
                 onChange={(e) => setConnectForm((p) => ({ ...p, seed: e.target.value }))}
                 placeholder="例如 127.0.0.1:3011"
               />
-              <Button variant="contained" color="secondary" onClick={onConnectNode}>
-                连接 Seed
+              <Button
+                variant="contained"
+                color="secondary"
+                disabled={isDemoBusy || isNodeActionBusy}
+                onClick={onConnectNode}
+              >
+                {busyActions.connectNode ? '连接中...' : '连接 Seed'}
               </Button>
             </Stack>
           </CardContent>
@@ -416,9 +470,14 @@ function NetworkPage({
                 variant="contained"
                 color="secondary"
                 onClick={onInitializeNodeBlockchain}
-                disabled={!nodeControlForm.address || !nodeControlForm.rewardAddress}
+                disabled={
+                  isDemoBusy ||
+                  isNodeActionBusy ||
+                  !nodeControlForm.address ||
+                  !nodeControlForm.rewardAddress
+                }
               >
-                初始化节点链
+                {busyActions.initializeNodeBlockchain ? '初始化中...' : '初始化节点链'}
               </Button>
             </Stack>
 
@@ -470,12 +529,22 @@ function NetworkPage({
               <Button
                 variant="contained"
                 onClick={onSubmitNodeTransaction}
-                disabled={!nodeControlForm.address || !nodeControlForm.from || !nodeControlForm.to}
+                disabled={
+                  isDemoBusy ||
+                  isNodeActionBusy ||
+                  !nodeControlForm.address ||
+                  !nodeControlForm.from ||
+                  !nodeControlForm.to
+                }
               >
-                通过节点发交易
+                {busyActions.submitNodeTransaction ? '发送中...' : '通过节点发交易'}
               </Button>
-              <Button variant="outlined" onClick={onMineNode} disabled={!nodeControlForm.address}>
-                让节点挖矿
+              <Button
+                variant="outlined"
+                onClick={onMineNode}
+                disabled={isDemoBusy || isNodeActionBusy || !nodeControlForm.address}
+              >
+                {busyActions.mineNode ? '挖矿中...' : '让节点挖矿'}
               </Button>
             </Stack>
           </Stack>

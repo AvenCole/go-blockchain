@@ -29,6 +29,7 @@ import TerminalIcon from '@mui/icons-material/Terminal';
 import HubIcon from '@mui/icons-material/Hub';
 import LightModeIcon from '@mui/icons-material/LightMode';
 import DarkModeIcon from '@mui/icons-material/DarkMode';
+import { EventsOn } from '../wailsjs/runtime/runtime';
 import DashboardPage from './pages/DashboardPage';
 import WalletsPage from './pages/WalletsPage';
 import BlocksPage from './pages/BlocksPage';
@@ -66,6 +67,7 @@ import type {
   MultiSigOutputView,
   NetworkDemoResult,
   NetworkPartitionDemoResult,
+  NetworkOperationProgress,
   NetworkReorgDemoResult,
   NodeStatus,
   WalletView,
@@ -86,6 +88,17 @@ const navItems: NavItem[] = [
 ];
 
 function App() {
+  type BusyActionKey =
+    | 'startNode'
+    | 'stopNode'
+    | 'connectNode'
+    | 'initializeNodeBlockchain'
+    | 'submitNodeTransaction'
+    | 'mineNode'
+    | 'runNetworkQuickDemo'
+    | 'runNetworkReorgDemo'
+    | 'runNetworkPartitionDemo';
+
   const prefersDark = useMediaQuery('(prefers-color-scheme: dark)');
   const [mode, setMode] = useState<'light' | 'dark'>(
     prefersDark ? 'dark' : 'light',
@@ -108,6 +121,19 @@ function App() {
     useState<NetworkReorgDemoResult | null>(null);
   const [networkPartitionDemo, setNetworkPartitionDemo] =
     useState<NetworkPartitionDemoResult | null>(null);
+  const [networkOperation, setNetworkOperation] =
+    useState<NetworkOperationProgress | null>(null);
+  const [busyActions, setBusyActions] = useState<Record<BusyActionKey, boolean>>({
+    startNode: false,
+    stopNode: false,
+    connectNode: false,
+    initializeNodeBlockchain: false,
+    submitNodeTransaction: false,
+    mineNode: false,
+    runNetworkQuickDemo: false,
+    runNetworkReorgDemo: false,
+    runNetworkPartitionDemo: false,
+  });
   const [txForm, setTxForm] = useState({
     template: 'p2pkh' as 'p2pkh' | 'p2pk' | 'multisig',
     from: '',
@@ -236,6 +262,19 @@ function App() {
     setMode(prefersDark ? 'dark' : 'light');
   }, [prefersDark]);
 
+  useEffect(() => {
+    const unsubscribe = EventsOn(
+      'network:operation',
+      (payload: NetworkOperationProgress) => {
+        setNetworkOperation(payload);
+      },
+    );
+
+    return () => {
+      unsubscribe();
+    };
+  }, []);
+
   const latestBlock = useMemo(
     () => (blocks.length > 0 ? blocks[0] : null),
     [blocks],
@@ -309,6 +348,36 @@ function App() {
       }),
     [mode],
   );
+
+  const isNodeActionBusy =
+    busyActions.startNode ||
+    busyActions.stopNode ||
+    busyActions.connectNode ||
+    busyActions.initializeNodeBlockchain ||
+    busyActions.submitNodeTransaction ||
+    busyActions.mineNode;
+
+  const isDemoBusy =
+    busyActions.runNetworkQuickDemo ||
+    busyActions.runNetworkReorgDemo ||
+    busyActions.runNetworkPartitionDemo ||
+    Boolean(
+      networkOperation &&
+        (networkOperation.status === 'started' ||
+          networkOperation.status === 'progress'),
+    );
+
+  const runBusyAction = async (
+    key: BusyActionKey,
+    action: () => Promise<void>,
+  ) => {
+    setBusyActions((prev) => ({ ...prev, [key]: true }));
+    try {
+      await action();
+    } finally {
+      setBusyActions((prev) => ({ ...prev, [key]: false }));
+    }
+  };
 
   const handleCreateWallet = async () => {
     try {
@@ -396,123 +465,141 @@ function App() {
   };
 
   const handleStartNode = async () => {
-    try {
-      setError('');
-      const addr = await startNode(
-        nodeForm.address,
-        nodeForm.seed,
-        nodeForm.miner,
-      );
-      setConnectForm((prev) => ({ ...prev, address: addr }));
-      setMessage(`节点已启动：${addr}`);
-      await refresh();
-    } catch (err) {
-      setError(String(err));
-    }
+    await runBusyAction('startNode', async () => {
+      try {
+        setError('');
+        const addr = await startNode(
+          nodeForm.address,
+          nodeForm.seed,
+          nodeForm.miner,
+        );
+        setConnectForm((prev) => ({ ...prev, address: addr }));
+        setMessage(`节点已启动：${addr}`);
+        await refresh();
+      } catch (err) {
+        setError(String(err));
+      }
+    });
   };
 
   const handleStopNode = async (address: string) => {
-    try {
-      setError('');
-      await stopNode(address);
-      setMessage(`节点已停止：${address}`);
-      await refresh();
-    } catch (err) {
-      setError(String(err));
-    }
+    await runBusyAction('stopNode', async () => {
+      try {
+        setError('');
+        await stopNode(address);
+        setMessage(`节点已停止：${address}`);
+        await refresh();
+      } catch (err) {
+        setError(String(err));
+      }
+    });
   };
 
   const handleConnectNode = async () => {
-    try {
-      setError('');
-      await connectNode(connectForm.address, connectForm.seed);
-      setMessage(`节点已连接：${connectForm.address} -> ${connectForm.seed}`);
-      await refresh();
-    } catch (err) {
-      setError(String(err));
-    }
+    await runBusyAction('connectNode', async () => {
+      try {
+        setError('');
+        await connectNode(connectForm.address, connectForm.seed);
+        setMessage(`节点已连接：${connectForm.address} -> ${connectForm.seed}`);
+        await refresh();
+      } catch (err) {
+        setError(String(err));
+      }
+    });
   };
 
   const handleInitializeNodeBlockchain = async () => {
-    try {
-      setError('');
-      await initializeNodeBlockchain(
-        nodeControlForm.address,
-        nodeControlForm.rewardAddress,
-      );
-      setMessage(`节点区块链已就绪：${nodeControlForm.address}`);
-      await refresh();
-    } catch (err) {
-      setError(String(err));
-    }
+    await runBusyAction('initializeNodeBlockchain', async () => {
+      try {
+        setError('');
+        await initializeNodeBlockchain(
+          nodeControlForm.address,
+          nodeControlForm.rewardAddress,
+        );
+        setMessage(`节点区块链已就绪：${nodeControlForm.address}`);
+        await refresh();
+      } catch (err) {
+        setError(String(err));
+      }
+    });
   };
 
   const handleSubmitNodeTransaction = async () => {
-    try {
-      setError('');
-      const txid = await submitNodeTransaction(
-        nodeControlForm.address,
-        nodeControlForm.from,
-        nodeControlForm.to,
-        Number(nodeControlForm.amount),
-        Number(nodeControlForm.fee || '0'),
-      );
-      setMessage(`节点交易已进入 Mempool：${txid}`);
-      await refresh();
-    } catch (err) {
-      setError(String(err));
-    }
+    await runBusyAction('submitNodeTransaction', async () => {
+      try {
+        setError('');
+        const txid = await submitNodeTransaction(
+          nodeControlForm.address,
+          nodeControlForm.from,
+          nodeControlForm.to,
+          Number(nodeControlForm.amount),
+          Number(nodeControlForm.fee || '0'),
+        );
+        setMessage(`节点交易已进入 Mempool：${txid}`);
+        await refresh();
+      } catch (err) {
+        setError(String(err));
+      }
+    });
   };
 
   const handleMineNode = async () => {
-    try {
-      setError('');
-      const hash = await mineNodePending(nodeControlForm.address);
-      setMessage(`节点已挖出新区块：${hash}`);
-      await refresh();
-    } catch (err) {
-      setError(String(err));
-    }
+    await runBusyAction('mineNode', async () => {
+      try {
+        setError('');
+        const hash = await mineNodePending(nodeControlForm.address);
+        setMessage(`节点已挖出新区块：${hash}`);
+        await refresh();
+      } catch (err) {
+        setError(String(err));
+      }
+    });
   };
 
   const handleRunNetworkQuickDemo = async () => {
-    try {
-      setError('');
-      const result = await runNetworkQuickDemo();
-      setNetworkDemo(result);
-      setMessage(`快速同步已完成：${result.sourceNode} -> ${result.peerNode}`);
-      await refresh();
-    } catch (err) {
-      setError(String(err));
-    }
+    await runBusyAction('runNetworkQuickDemo', async () => {
+      try {
+        setError('');
+        const result = await runNetworkQuickDemo();
+        setNetworkDemo(result);
+        setMessage(`快速同步已完成：${result.sourceNode} -> ${result.peerNode}`);
+        await refresh();
+      } catch (err) {
+        setError(String(err));
+      }
+    });
   };
 
   const handleRunNetworkReorgDemo = async () => {
-    try {
-      setError('');
-      const result = await runNetworkReorgDemo();
-      setNetworkReorgDemo(result);
-      setMessage(
-        `重组流程已完成：${result.sourceNode} -> ${result.peerNode}`,
-      );
-      await refresh();
-    } catch (err) {
-      setError(String(err));
-    }
+    await runBusyAction('runNetworkReorgDemo', async () => {
+      try {
+        setError('');
+        const result = await runNetworkReorgDemo();
+        setNetworkReorgDemo(result);
+        setMessage(
+          `重组流程已完成：${result.sourceNode} -> ${result.peerNode}`,
+        );
+        await refresh();
+      } catch (err) {
+        setError(String(err));
+      }
+    });
   };
 
   const handleRunNetworkPartitionDemo = async () => {
-    try {
-      setError('');
-      const result = await runNetworkPartitionDemo();
-      setNetworkPartitionDemo(result);
-      setMessage(
-        `三节点分区流程已完成：${result.sourceNode} / ${result.peerNode} / ${result.forkNode}`,
-      );
-      await refresh();
-    } catch (err) {
-      setError(String(err));
-    }
+    await runBusyAction('runNetworkPartitionDemo', async () => {
+      try {
+        setError('');
+        const result = await runNetworkPartitionDemo();
+        setNetworkPartitionDemo(result);
+        setMessage(
+          `三节点分区流程已完成：${result.sourceNode} / ${result.peerNode} / ${result.forkNode}`,
+        );
+        await refresh();
+      } catch (err) {
+        setError(String(err));
+      }
+    });
   };
 
   const handleSpendMultiSig = async () => {
@@ -727,6 +814,10 @@ function App() {
                       onRunNetworkQuickDemo={handleRunNetworkQuickDemo}
                       onRunNetworkReorgDemo={handleRunNetworkReorgDemo}
                       onRunNetworkPartitionDemo={handleRunNetworkPartitionDemo}
+                      operationProgress={networkOperation}
+                      isDemoBusy={isDemoBusy}
+                      busyActions={busyActions}
+                      isNodeActionBusy={isNodeActionBusy}
                     />
                   </CardContent>
                 </Card>

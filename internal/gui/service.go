@@ -9,6 +9,7 @@ import (
 	"sync"
 
 	"go-blockchain/internal/config"
+	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
 const guiDataDirEnv = "GO_BLOCKCHAIN_GUI_DATA_DIR"
@@ -19,6 +20,7 @@ type Service struct {
 	mu     sync.Mutex
 	nodeMu sync.Mutex
 	nodes  map[string]*nodeSession
+	emit   func(ctx context.Context, eventName string, optionalData ...interface{})
 }
 
 func NewService() *Service {
@@ -28,6 +30,12 @@ func NewService() *Service {
 	return &Service{
 		cfg:   cfg,
 		nodes: make(map[string]*nodeSession),
+		emit: func(ctx context.Context, eventName string, optionalData ...interface{}) {
+			if ctx == nil {
+				return
+			}
+			runtime.EventsEmit(ctx, eventName, optionalData...)
+		},
 	}
 }
 

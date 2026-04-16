@@ -150,3 +150,17 @@ export type NetworkPartitionDemoResult = {
   restored: boolean
   allConverged: boolean
 }
+
+export type NetworkOperationProgress = {
+  operation: string
+  status: 'started' | 'progress' | 'completed' | 'failed'
+  phase: string
+  message: string
+  currentStep: number
+  totalSteps: number
+  startedAt: string
+  finishedAt?: string
+  elapsedMs: number
+  error?: string
+  summary?: string
+}

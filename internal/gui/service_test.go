@@ -1,6 +1,7 @@
 package gui
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -403,6 +404,49 @@ func TestRunNetworkQuickDemo(t *testing.T) {
 	}
 	if len(nodes) != 2 {
 		t.Fatalf("len(nodes) = %d, want 2", len(nodes))
+	}
+}
+
+func TestRunNetworkQuickDemoEmitsOperationProgress(t *testing.T) {
+	t.Setenv(guiDataDirEnv, t.TempDir())
+
+	service := NewService()
+	var events []NetworkOperationProgress
+	service.setRuntimeEmitter(func(_ context.Context, eventName string, optionalData ...interface{}) {
+		if eventName != networkOperationEventName || len(optionalData) == 0 {
+			return
+		}
+		progress, ok := optionalData[0].(NetworkOperationProgress)
+		if !ok {
+			t.Fatalf("unexpected operation payload type: %T", optionalData[0])
+		}
+		events = append(events, progress)
+	})
+
+	result, err := service.RunNetworkQuickDemo()
+	if err != nil {
+		t.Fatalf("RunNetworkQuickDemo() error = %v", err)
+	}
+	t.Cleanup(func() {
+		_ = service.StopNode(result.SourceNode)
+		_ = service.StopNode(result.PeerNode)
+	})
+
+	if len(events) < 3 {
+		t.Fatalf("len(events) = %d, want at least 3 progress updates", len(events))
+	}
+	if events[0].Status != "started" {
+		t.Fatalf("events[0].Status = %q, want started", events[0].Status)
+	}
+	last := events[len(events)-1]
+	if last.Status != "completed" {
+		t.Fatalf("last.Status = %q, want completed", last.Status)
+	}
+	if last.Operation != "network.quick-demo" {
+		t.Fatalf("last.Operation = %q, want network.quick-demo", last.Operation)
+	}
+	if last.CurrentStep != last.TotalSteps {
+		t.Fatalf("last.CurrentStep/TotalSteps = %d/%d, want equal", last.CurrentStep, last.TotalSteps)
 	}
 }
 
