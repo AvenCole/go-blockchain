@@ -13,6 +13,10 @@ import {
   Tabs,
   Toolbar,
   Typography,
+  IconButton,
+  createTheme,
+  ThemeProvider,
+  PaletteMode,
 } from '@mui/material';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import WalletIcon from '@mui/icons-material/AccountBalanceWallet';
@@ -21,6 +25,8 @@ import DashboardIcon from '@mui/icons-material/Dashboard';
 import BuildIcon from '@mui/icons-material/Construction';
 import TerminalIcon from '@mui/icons-material/Terminal';
 import HubIcon from '@mui/icons-material/Hub';
+import Brightness4Icon from '@mui/icons-material/Brightness4';
+import Brightness7Icon from '@mui/icons-material/Brightness7';
 import { EventsOn } from '../wailsjs/runtime/runtime';
 import DashboardPage from './pages/DashboardPage';
 import WalletsPage from './pages/WalletsPage';
@@ -90,6 +96,26 @@ function App() {
     | 'runNetworkQuickDemo'
     | 'runNetworkReorgDemo'
     | 'runNetworkPartitionDemo';
+
+  const [mode, setMode] = useState<PaletteMode>(
+    (localStorage.getItem('themeMode') as PaletteMode) || 'light',
+  );
+
+  const theme = useMemo(
+    () =>
+      createTheme({
+        palette: {
+          mode,
+        },
+      }),
+    [mode],
+  );
+
+  const toggleColorMode = () => {
+    const newMode = mode === 'light' ? 'dark' : 'light';
+    setMode(newMode);
+    localStorage.setItem('themeMode', newMode);
+  };
 
   const [tab, setTab] = useState(0);
   const [dashboard, setDashboard] = useState<DashboardData | null>(null);
@@ -569,7 +595,7 @@ function App() {
   };
 
   return (
-    <>
+    <ThemeProvider theme={theme}>
       <CssBaseline />
       <Box sx={{ height: '100dvh', display: 'flex', flexDirection: 'column' }}>
         <AppBar
@@ -580,10 +606,18 @@ function App() {
         >
           <Toolbar sx={{ gap: 2, minHeight: 64 }}>
             <Stack spacing={0.25} sx={{ flexGrow: 1 }}>
-              <Typography variant="h6" sx={{ fontWeight: 700 }}>
+              <Typography variant="h6" sx={{ fontWeight: 800, letterSpacing: -0.5 }}>
                 go-blockchain GUI
               </Typography>
             </Stack>
+            <Button
+              onClick={toggleColorMode}
+              color="inherit"
+              startIcon={mode === 'dark' ? <Brightness7Icon /> : <Brightness4Icon />}
+              variant="text"
+            >
+              {mode === 'dark' ? '浅色' : '深色'}
+            </Button>
             <Button startIcon={<RefreshIcon />} variant="outlined" onClick={() => void refresh()}>
               刷新
             </Button>
@@ -635,7 +669,7 @@ function App() {
                     px: 1,
                   },
                   '& .MuiTab-root': {
-                    alignItems: 'flex-start',
+                    alignItems: 'center',
                     justifyContent: 'flex-start',
                     textAlign: 'left',
                     minHeight: 44,
@@ -780,7 +814,7 @@ function App() {
           </Box>
         </Box>
       </Box>
-    </>
+    </ThemeProvider>
   );
 }
 
