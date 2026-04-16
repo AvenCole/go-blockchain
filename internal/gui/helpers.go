@@ -25,7 +25,7 @@ func friendlyGUIError(err error) error {
 		return nil
 	}
 	if errors.Is(err, blockchain.ErrBlockchainNotInitialized) {
-		return fmt.Errorf("当前还没有初始化区块链。请先在命令行执行 createblockchain <钱包地址>，然后再回到 GUI 刷新")
+		return fmt.Errorf("当前还没有初始化区块链。请先在 GUI 中选择钱包并初始化主链")
 	}
 	return err
 }

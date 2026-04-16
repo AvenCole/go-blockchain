@@ -153,6 +153,8 @@ function App() {
   const [minerAddress, setMinerAddress] = useState('');
   const [command, setCommand] = useState('');
   const [history, setHistory] = useState<CommandResult[]>([]);
+  const [chainInitAddress, setChainInitAddress] = useState('');
+  const [isInitializingBlockchain, setIsInitializingBlockchain] = useState(false);
   const [nodeForm, setNodeForm] = useState({
     address: '127.0.0.1:3010',
     seed: '',
@@ -190,6 +192,9 @@ function App() {
 
       if (!minerAddress && walletList.length > 0) {
         setMinerAddress(walletList[0].address);
+      }
+      if (!chainInitAddress && walletList.length > 0) {
+        setChainInitAddress(walletList[0].address);
       }
       if (!txForm.from && walletList.length > 0) {
         setTxForm((prev) => ({ ...prev, from: walletList[0].address }));
@@ -394,9 +399,37 @@ function App() {
       setError('');
       const address = await createWallet();
       setMessage(`已创建钱包：${address}`);
+      if (!chainInitAddress) {
+        setChainInitAddress(address);
+      }
       await refresh();
     } catch (err) {
       setError(String(err));
+    }
+  };
+
+  const handleInitializeBlockchain = async () => {
+    if (!chainInitAddress) {
+      return;
+    }
+
+    try {
+      setIsInitializingBlockchain(true);
+      setError('');
+      const result = await executeCLI(`createblockchain ${chainInitAddress}`);
+      setHistory((prev) => [result, ...prev].slice(0, 20));
+
+      if (result.exitCode !== 0) {
+        setError(result.stderr || result.stdout || '初始化主链失败');
+        return;
+      }
+
+      setMessage(`主链已初始化：${chainInitAddress}`);
+      await refresh();
+    } catch (err) {
+      setError(String(err));
+    } finally {
+      setIsInitializingBlockchain(false);
     }
   };
 
@@ -633,7 +666,13 @@ function App() {
   return (
     <ThemeProvider theme={theme}>
       <CssBaseline />
-      <Box sx={{ minHeight: '100dvh', backgroundColor: 'background.default' }}>
+      <Box
+        sx={{
+          height: '100dvh',
+          overflow: 'hidden',
+          backgroundColor: 'background.default',
+        }}
+      >
         <AppBar
           position="sticky"
           color="inherit"
@@ -667,18 +706,20 @@ function App() {
         <Container
           maxWidth={false}
           sx={{
-            py: 2.5,
+            height: 'calc(100dvh - 64px)',
+            py: 2,
             px: 2.5,
-            maxWidth: 1680,
-            mx: 'auto',
+            maxWidth: 'none',
           }}
         >
-          <Stack spacing={2.5}>
+          <Stack spacing={2} sx={{ height: '100%' }}>
             {message ? <Alert severity="success">{message}</Alert> : null}
             {error ? <Alert severity="error">{error}</Alert> : null}
 
             <Box
               sx={{
+                flex: 1,
+                minHeight: 0,
                 display: 'grid',
                 gap: 2,
                 alignItems: 'start',
@@ -689,8 +730,7 @@ function App() {
                 variant="outlined"
                 sx={{
                   p: 1,
-                  position: 'sticky',
-                  top: 88,
+                  height: '100%',
                   overflow: 'hidden',
                   borderColor: 'divider',
                   backgroundImage: 'none',
@@ -751,7 +791,15 @@ function App() {
                 </Stack>
               </Paper>
 
-              <Stack spacing={2.5} sx={{ minWidth: 0 }}>
+              <Stack spacing={0} sx={{ minWidth: 0, minHeight: 0 }}>
+                <Box
+                  sx={{
+                    flex: 1,
+                    minHeight: 0,
+                    overflow: 'auto',
+                    pr: 0.5,
+                  }}
+                >
                 <Box
                   sx={{
                     display: tab === 0 ? 'block' : 'none',
@@ -765,6 +813,10 @@ function App() {
                       mempool={mempool}
                       multiSigOutputs={multiSigOutputs}
                       nodes={nodes}
+                      chainInitAddress={chainInitAddress}
+                      setChainInitAddress={setChainInitAddress}
+                      onInitializeBlockchain={handleInitializeBlockchain}
+                      isInitializingBlockchain={isInitializingBlockchain}
                     />
                   </Box>
                 </Box>
@@ -871,24 +923,9 @@ function App() {
                     />
                   </Box>
                 </Box>
+                </Box>
               </Stack>
             </Box>
-
-            <Paper variant="outlined" sx={{ px: 1.5, py: 1.25 }}>
-              <Stack
-                direction={{ xs: 'column', md: 'row' }}
-                spacing={1.5}
-                sx={{ justifyContent: 'space-between' }}
-              >
-                <Typography variant="body2" color="text.secondary">
-                  最新区块：{latestBlock?.hash ?? '尚未初始化'}
-                </Typography>
-                <Typography variant="body2" color="text.secondary">
-                  节点数：{nodes.length} | 待打包交易：{mempool.length} |
-                  网络模式：{dashboard?.networkMode ?? '-'}
-                </Typography>
-              </Stack>
-            </Paper>
           </Stack>
         </Container>
       </Box>

@@ -1,12 +1,15 @@
 import {
   Box,
+  Button,
   Card,
   CardContent,
   Divider,
   List,
   ListItem,
   ListItemText,
+  MenuItem,
   Stack,
+  TextField,
   Typography,
 } from '@mui/material'
 import StatCard from '../components/StatCard'
@@ -26,6 +29,10 @@ type DashboardPageProps = {
   mempool: string[]
   multiSigOutputs: MultiSigOutputView[]
   nodes: NodeStatus[]
+  chainInitAddress: string
+  setChainInitAddress: React.Dispatch<React.SetStateAction<string>>
+  onInitializeBlockchain: () => Promise<void>
+  isInitializingBlockchain: boolean
 }
 
 function DashboardPage({
@@ -35,6 +42,10 @@ function DashboardPage({
   mempool,
   multiSigOutputs,
   nodes,
+  chainInitAddress,
+  setChainInitAddress,
+  onInitializeBlockchain,
+  isInitializingBlockchain,
 }: DashboardPageProps) {
   if (!dashboard) return null
 
@@ -50,6 +61,46 @@ function DashboardPage({
 
   return (
     <Stack spacing={2}>
+      {dashboard.height < 0 ? (
+        <Card variant="outlined">
+          <CardContent sx={{ p: 2.25 }}>
+            <Typography variant="h6">主链初始化</Typography>
+            <Stack
+              direction="row"
+              spacing={2}
+              sx={{ mt: 2, alignItems: 'center' }}
+            >
+              <TextField
+                select
+                fullWidth
+                label="钱包地址"
+                value={chainInitAddress}
+                onChange={(e) => setChainInitAddress(e.target.value)}
+              >
+                {wallets.length === 0 ? (
+                  <MenuItem value="" disabled>
+                    请先创建钱包
+                  </MenuItem>
+                ) : (
+                  wallets.map((wallet) => (
+                    <MenuItem key={wallet.address} value={wallet.address}>
+                      {wallet.address}
+                    </MenuItem>
+                  ))
+                )}
+              </TextField>
+              <Button
+                variant="contained"
+                disabled={!chainInitAddress || isInitializingBlockchain}
+                onClick={onInitializeBlockchain}
+              >
+                {isInitializingBlockchain ? '初始化中...' : '初始化主链'}
+              </Button>
+            </Stack>
+          </CardContent>
+        </Card>
+      ) : null}
+
       <Box
         sx={{
           display: 'grid',
@@ -59,7 +110,7 @@ function DashboardPage({
       >
         <StatCard
           title="区块高度"
-          value={dashboard.height}
+          value={dashboard.height >= 0 ? dashboard.height : '--'}
           secondary={shortHash(dashboard.latestHash) || '尚未建链'}
         />
         <StatCard
@@ -120,7 +171,11 @@ function DashboardPage({
               <CardContent sx={{ p: 2.25 }}>
                 <Typography variant="h6">钱包总览</Typography>
                 {wallets.length > 0 ? (
-                  <List dense disablePadding sx={{ mt: 1.5 }}>
+                  <List
+                    dense
+                    disablePadding
+                    sx={{ mt: 1.5, maxHeight: 260, overflow: 'auto' }}
+                  >
                     {wallets.slice(0, 6).map((wallet) => (
                       <ListItem key={wallet.address} disablePadding sx={{ py: 0.7 }}>
                         <ListItemText
@@ -203,11 +258,11 @@ function DashboardPage({
         </Stack>
 
         <Stack spacing={2}>
-          <Card variant="outlined">
-            <CardContent sx={{ p: 2.25 }}>
-              <Typography variant="h6">Mempool</Typography>
-              {mempool.length > 0 ? (
-                <List dense disablePadding sx={{ mt: 1.5 }}>
+            <Card variant="outlined">
+              <CardContent sx={{ p: 2.25 }}>
+                <Typography variant="h6">Mempool</Typography>
+                {mempool.length > 0 ? (
+                <List dense disablePadding sx={{ mt: 1.5, maxHeight: 220, overflow: 'auto' }}>
                   {mempool.slice(0, 8).map((txid) => (
                     <ListItem key={txid} disablePadding sx={{ py: 0.7 }}>
                       <ListItemText primary={shortHash(txid, 14, 10)} />
@@ -222,11 +277,11 @@ function DashboardPage({
             </CardContent>
           </Card>
 
-          <Card variant="outlined">
-            <CardContent sx={{ p: 2.25 }}>
-              <Typography variant="h6">未花费多签输出</Typography>
-              {multiSigOutputs.length > 0 ? (
-                <List dense disablePadding sx={{ mt: 1.5 }}>
+            <Card variant="outlined">
+              <CardContent sx={{ p: 2.25 }}>
+                <Typography variant="h6">未花费多签输出</Typography>
+                {multiSigOutputs.length > 0 ? (
+                <List dense disablePadding sx={{ mt: 1.5, maxHeight: 220, overflow: 'auto' }}>
                   {multiSigOutputs.slice(0, 6).map((item) => (
                     <ListItem key={`${item.txid}:${item.out}`} disablePadding sx={{ py: 0.7 }}>
                       <ListItemText
@@ -244,11 +299,11 @@ function DashboardPage({
             </CardContent>
           </Card>
 
-          <Card variant="outlined">
-            <CardContent sx={{ p: 2.25 }}>
-              <Typography variant="h6">节点活动摘要</Typography>
-              {latestNodeEvents.length > 0 ? (
-                <List dense disablePadding sx={{ mt: 1.5 }}>
+            <Card variant="outlined">
+              <CardContent sx={{ p: 2.25 }}>
+                <Typography variant="h6">节点活动摘要</Typography>
+                {latestNodeEvents.length > 0 ? (
+                <List dense disablePadding sx={{ mt: 1.5, maxHeight: 220, overflow: 'auto' }}>
                   {latestNodeEvents.map((event, index) => (
                     <ListItem
                       key={`${event.node}-${event.timestamp}-${index}`}

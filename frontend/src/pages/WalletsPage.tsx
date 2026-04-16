@@ -29,7 +29,7 @@ function WalletsPage({ wallets, onCreateWallet }: WalletsPageProps) {
         <Card variant="outlined">
           <CardContent sx={{ p: 2.25 }}>
             <Typography variant="h6">地址与余额</Typography>
-            <Stack spacing={1.5} sx={{ mt: 2 }}>
+            <Stack spacing={1.5} sx={{ mt: 2, maxHeight: 'calc(100dvh - 260px)', overflow: 'auto', pr: 0.5 }}>
               {wallets.length > 0 ? wallets.map((item) => (
                 <Card key={item.address} variant="outlined" sx={{ borderRadius: 0.5 }}>
                   <CardContent sx={{ p: 1.5 }}>
