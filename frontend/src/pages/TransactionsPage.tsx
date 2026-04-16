@@ -52,7 +52,7 @@ function TransactionsPage({
       sx={{
         display: 'grid',
         gap: 2,
-        gridTemplateColumns: { xs: '1fr', xl: 'minmax(0, 1fr) minmax(0, 1fr)' },
+        gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)',
       }}
     >
       <Box>

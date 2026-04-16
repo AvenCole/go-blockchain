@@ -54,7 +54,7 @@ function DashboardPage({
         sx={{
           display: 'grid',
           gap: 2,
-          gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)', xl: 'repeat(4, 1fr)' },
+          gridTemplateColumns: 'repeat(4, minmax(0, 1fr))',
         }}
       >
         <StatCard
@@ -83,7 +83,7 @@ function DashboardPage({
         sx={{
           display: 'grid',
           gap: 2,
-          gridTemplateColumns: { xs: '1fr', xxl: 'minmax(0, 1.3fr) 360px' },
+          gridTemplateColumns: 'minmax(0, 1.3fr) 360px',
         }}
       >
         <Stack spacing={2}>
@@ -91,7 +91,7 @@ function DashboardPage({
             sx={{
               display: 'grid',
               gap: 2,
-              gridTemplateColumns: { xs: '1fr', xl: 'minmax(0, 1.1fr) minmax(320px, 0.9fr)' },
+              gridTemplateColumns: 'minmax(0, 1.1fr) minmax(320px, 0.9fr)',
             }}
           >
             <Card variant="outlined">
@@ -143,7 +143,7 @@ function DashboardPage({
             sx={{
               display: 'grid',
               gap: 2,
-              gridTemplateColumns: { xs: '1fr', xl: '1fr 1fr' },
+              gridTemplateColumns: '1fr 1fr',
             }}
           >
             <Card variant="outlined">

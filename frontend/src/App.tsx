@@ -640,7 +640,7 @@ function App() {
           elevation={0}
           sx={{ borderBottom: 1, borderColor: 'divider' }}
         >
-          <Toolbar sx={{ gap: 2, minHeight: { xs: 64, md: 72 } }}>
+          <Toolbar sx={{ gap: 2, minHeight: 64 }}>
             <Stack spacing={0.25} sx={{ flexGrow: 1 }}>
               <Typography variant="h5" sx={{ fontWeight: 700 }}>
                 go-blockchain GUI
@@ -668,7 +668,7 @@ function App() {
           maxWidth={false}
           sx={{
             py: 2.5,
-            px: { xs: 1.5, md: 2.5 },
+            px: 2.5,
             maxWidth: 1680,
             mx: 'auto',
           }}
@@ -682,18 +682,15 @@ function App() {
                 display: 'grid',
                 gap: 2,
                 alignItems: 'start',
-                gridTemplateColumns: {
-                  xs: '1fr',
-                  lg: '228px minmax(0, 1fr)',
-                },
+                gridTemplateColumns: '228px minmax(0, 1fr)',
               }}
             >
               <Paper
                 variant="outlined"
                 sx={{
                   p: 1,
-                  position: { lg: 'sticky' },
-                  top: { lg: 88 },
+                  position: 'sticky',
+                  top: 88,
                   overflow: 'hidden',
                   borderColor: 'divider',
                   backgroundImage: 'none',

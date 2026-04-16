@@ -12,7 +12,7 @@ function WalletsPage({ wallets, onCreateWallet }: WalletsPageProps) {
       sx={{
         display: 'grid',
         gap: 2,
-        gridTemplateColumns: { xs: '1fr', lg: '320px minmax(0, 1fr)' },
+        gridTemplateColumns: '320px minmax(0, 1fr)',
       }}
     >
       <Box>

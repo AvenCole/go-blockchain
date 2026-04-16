@@ -1,15 +1,16 @@
 import { useMemo } from 'react'
 import {
+  Box,
   Button,
-  Card,
-  CardContent,
-  Chip,
+  Divider,
+  List,
+  ListItemButton,
+  ListItemText,
   Paper,
   Stack,
   TextField,
   Typography,
 } from '@mui/material'
-import CommandPresetGroupCard from '../components/console/CommandPresetGroupCard'
 import type {
   CommandResult,
   MultiSigOutputView,
@@ -57,118 +58,195 @@ function ConsolePage({
   )
 
   return (
-    <Stack spacing={2}>
-      <Card variant="outlined">
-        <CardContent sx={{ p: 2 }}>
-          <Typography variant="h6">终端控制台</Typography>
-          <Typography color="text.secondary" sx={{ mt: 1 }}>
-            输入 CLI 命令并查看 stdout / stderr。
-          </Typography>
-          <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} sx={{ mt: 2 }}>
-            <TextField
-              fullWidth
-              label="命令"
-              value={command}
-              onChange={(e) => setCommand(e.target.value)}
-              placeholder="例如: runnetdemo / runreorgdemo / runpartitiondemo / nodeinit <node> / nodesend <node> <from> <to> 10 1"
-            />
-            <Button variant="contained" onClick={onExecute}>
-              执行
-            </Button>
-          </Stack>
-          <Stack spacing={1.25} sx={{ mt: 2.5 }}>
-            <Typography variant="subtitle2">最近命令</Typography>
-            {recentCommands.length === 0 ? (
-              <Typography variant="body2" color="text.secondary">
-                执行过的命令会显示在这里，方便快速复用。
-              </Typography>
-            ) : (
-              <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: 'wrap' }}>
+    <Box
+      sx={{
+        display: 'grid',
+        gap: 2,
+        gridTemplateColumns: '280px minmax(0, 1fr)',
+        minHeight: 760,
+      }}
+    >
+      <Paper
+        variant="outlined"
+        sx={{
+          overflow: 'hidden',
+          display: 'flex',
+          flexDirection: 'column',
+          minHeight: 0,
+        }}
+      >
+        <Box sx={{ px: 2, py: 1.5 }}>
+          <Typography variant="h6">命令列表</Typography>
+        </Box>
+        <Divider />
+        <Box sx={{ overflow: 'auto', minHeight: 0 }}>
+          {recentCommands.length > 0 ? (
+            <>
+              <Box sx={{ px: 2, py: 1.25 }}>
+                <Typography variant="subtitle2" color="text.secondary">
+                  最近
+                </Typography>
+              </Box>
+              <List dense disablePadding>
                 {recentCommands.map((item) => (
-                  <Chip
-                    key={item}
-                    label={item}
-                    variant="outlined"
-                    onClick={() => setCommand(item)}
-                  />
+                  <ListItemButton key={item} onClick={() => setCommand(item)}>
+                    <ListItemText primary={item} />
+                  </ListItemButton>
                 ))}
-              </Stack>
-            )}
-          </Stack>
-        </CardContent>
-      </Card>
+              </List>
+              <Divider />
+            </>
+          ) : null}
 
-      <Stack direction={{ xs: 'column', xl: 'row' }} spacing={2}>
-        <Stack sx={{ flex: 1, minWidth: 0 }}>
-          <CommandPresetGroupCard
-            group={presetGroups[0]}
-            onFillCommand={setCommand}
-            onRunCommand={onRunCommand}
-          />
-        </Stack>
-        <Stack sx={{ flex: 1, minWidth: 0 }}>
-          <CommandPresetGroupCard
-            group={presetGroups[1]}
-            onFillCommand={setCommand}
-            onRunCommand={onRunCommand}
-          />
-        </Stack>
-      </Stack>
-
-      <Stack direction={{ xs: 'column', xl: 'row' }} spacing={2}>
-        <Stack sx={{ flex: 1, minWidth: 0 }}>
-          <CommandPresetGroupCard
-            group={presetGroups[2]}
-            onFillCommand={setCommand}
-            onRunCommand={onRunCommand}
-          />
-        </Stack>
-        <Stack sx={{ flex: 1, minWidth: 0 }}>
-          <CommandPresetGroupCard
-            group={presetGroups[3]}
-            onFillCommand={setCommand}
-            onRunCommand={onRunCommand}
-          />
-        </Stack>
-      </Stack>
-
-      <CommandPresetGroupCard
-        group={presetGroups[4]}
-        onFillCommand={setCommand}
-        onRunCommand={onRunCommand}
-      />
+          {presetGroups.map((group) => (
+            <Box key={group.id}>
+              <Box sx={{ px: 2, py: 1.25 }}>
+                <Typography variant="subtitle2" color="text.secondary">
+                  {group.title}
+                </Typography>
+              </Box>
+              <List dense disablePadding>
+                {group.presets.map((preset) => (
+                  <ListItemButton
+                    key={preset.id}
+                    onClick={() => setCommand(preset.command)}
+                    onDoubleClick={() => void onRunCommand(preset.command)}
+                  >
+                    <ListItemText
+                      primary={preset.label}
+                      secondary={
+                        <Typography
+                          component="span"
+                          variant="body2"
+                          sx={{
+                            fontFamily: 'Consolas, monospace',
+                            wordBreak: 'break-all',
+                            color: 'text.secondary',
+                          }}
+                        >
+                          {preset.command}
+                        </Typography>
+                      }
+                    />
+                  </ListItemButton>
+                ))}
+              </List>
+              <Divider />
+            </Box>
+          ))}
+        </Box>
+      </Paper>
 
       <Paper
         variant="outlined"
         sx={{
-          p: 2,
-          minHeight: 420,
-          bgcolor: '#0f172a',
-          color: '#d6f5d6',
-          fontFamily: 'Consolas, monospace',
-          overflow: 'auto',
-          borderRadius: 0.5,
-          borderColor: 'divider',
+          minHeight: 0,
+          display: 'flex',
+          flexDirection: 'column',
+          overflow: 'hidden',
+          bgcolor: '#0b1220',
+          color: '#d7e2f0',
+          borderColor: '#1f2937',
         }}
       >
-        <Stack spacing={2}>
+        <Stack
+          direction="row"
+          spacing={1.5}
+          sx={{
+            px: 2,
+            py: 1.5,
+            alignItems: 'center',
+            borderBottom: '1px solid #1f2937',
+          }}
+        >
+          <Typography variant="h6" sx={{ minWidth: 96 }}>
+            终端
+          </Typography>
+          <TextField
+            fullWidth
+            size="small"
+            value={command}
+            onChange={(e) => setCommand(e.target.value)}
+            placeholder="输入命令"
+            variant="outlined"
+            slotProps={{
+              input: {
+                sx: {
+                  color: '#e5eefb',
+                  fontFamily: 'Consolas, monospace',
+                },
+              },
+            }}
+            sx={{
+              '& .MuiOutlinedInput-root': {
+                bgcolor: '#111827',
+                borderRadius: 1,
+              },
+              '& .MuiOutlinedInput-notchedOutline': {
+                borderColor: '#334155',
+              },
+            }}
+          />
+          <Button variant="contained" onClick={onExecute}>
+            执行
+          </Button>
+        </Stack>
+
+        <Box
+          sx={{
+            flex: 1,
+            minHeight: 0,
+            overflow: 'auto',
+            px: 2,
+            py: 1.5,
+            fontFamily: 'Consolas, monospace',
+          }}
+        >
           {history.length === 0 ? (
-            <Typography sx={{ color: '#8adf8a' }}>
-              尚无命令输出。可以先尝试：runnetdemo、runreorgdemo、runpartitiondemo 或 nodes
+            <Typography sx={{ color: '#7dd3fc', fontFamily: 'Consolas, monospace' }}>
+              {'>'} 等待输入
             </Typography>
           ) : (
-            history.map((item, index) => (
-              <Stack key={`${item.command}-${index}`} spacing={1}>
-                <Typography sx={{ color: '#7dd3fc' }}>{'>'} {item.command}</Typography>
-                {item.stdout ? <Typography sx={{ whiteSpace: 'pre-wrap' }}>{item.stdout}</Typography> : null}
-                {item.stderr ? <Typography sx={{ whiteSpace: 'pre-wrap', color: '#fca5a5' }}>{item.stderr}</Typography> : null}
-                <Typography sx={{ color: '#94a3b8' }}>exitCode={item.exitCode}</Typography>
-              </Stack>
-            ))
+            <Stack spacing={2}>
+              {history.map((item, index) => (
+                <Stack key={`${item.command}-${index}`} spacing={0.9}>
+                  <Typography sx={{ color: '#7dd3fc', fontFamily: 'Consolas, monospace' }}>
+                    {'>'} {item.command}
+                  </Typography>
+                  {item.stdout ? (
+                    <Typography
+                      sx={{
+                        whiteSpace: 'pre-wrap',
+                        fontFamily: 'Consolas, monospace',
+                      }}
+                    >
+                      {item.stdout}
+                    </Typography>
+                  ) : null}
+                  {item.stderr ? (
+                    <Typography
+                      sx={{
+                        whiteSpace: 'pre-wrap',
+                        color: '#fda4af',
+                        fontFamily: 'Consolas, monospace',
+                      }}
+                    >
+                      {item.stderr}
+                    </Typography>
+                  ) : null}
+                  <Typography
+                    variant="caption"
+                    sx={{ color: '#94a3b8', fontFamily: 'Consolas, monospace' }}
+                  >
+                    exitCode={item.exitCode}
+                  </Typography>
+                </Stack>
+              ))}
+            </Stack>
           )}
-        </Stack>
+        </Box>
       </Paper>
-    </Stack>
+    </Box>
   )
 }
 
