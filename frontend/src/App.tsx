@@ -8,16 +8,11 @@ import {
   Container,
   CssBaseline,
   Divider,
-  IconButton,
-  Paper,
   Stack,
   Tab,
   Tabs,
-  ThemeProvider,
   Toolbar,
   Typography,
-  createTheme,
-  useMediaQuery,
 } from '@mui/material';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import WalletIcon from '@mui/icons-material/AccountBalanceWallet';
@@ -26,8 +21,6 @@ import DashboardIcon from '@mui/icons-material/Dashboard';
 import BuildIcon from '@mui/icons-material/Construction';
 import TerminalIcon from '@mui/icons-material/Terminal';
 import HubIcon from '@mui/icons-material/Hub';
-import LightModeIcon from '@mui/icons-material/LightMode';
-import DarkModeIcon from '@mui/icons-material/DarkMode';
 import { EventsOn } from '../wailsjs/runtime/runtime';
 import DashboardPage from './pages/DashboardPage';
 import WalletsPage from './pages/WalletsPage';
@@ -98,10 +91,6 @@ function App() {
     | 'runNetworkReorgDemo'
     | 'runNetworkPartitionDemo';
 
-  const prefersDark = useMediaQuery('(prefers-color-scheme: dark)');
-  const [mode, setMode] = useState<'light' | 'dark'>(
-    prefersDark ? 'dark' : 'light',
-  );
   const [tab, setTab] = useState(0);
   const [dashboard, setDashboard] = useState<DashboardData | null>(null);
   const [wallets, setWallets] = useState<WalletView[]>([]);
@@ -263,10 +252,6 @@ function App() {
   }, []);
 
   useEffect(() => {
-    setMode(prefersDark ? 'dark' : 'light');
-  }, [prefersDark]);
-
-  useEffect(() => {
     const unsubscribe = EventsOn(
       'network:operation',
       (payload: NetworkOperationProgress) => {
@@ -283,86 +268,6 @@ function App() {
     () => (blocks.length > 0 ? blocks[0] : null),
     [blocks],
   );
-  const theme = useMemo(
-    () =>
-      createTheme({
-        typography: {
-          fontFamily: '"Segoe UI", "Inter", "PingFang SC", sans-serif',
-        },
-        palette: {
-          mode,
-          ...(mode === 'dark'
-            ? {
-                background: { default: '#101216', paper: '#171a20' },
-              }
-            : {
-                background: { default: '#eef1f5', paper: '#ffffff' },
-              }),
-        },
-        shape: { borderRadius: 1.5 },
-        components: {
-          MuiCard: {
-            styleOverrides: {
-              root: {
-                borderRadius: 1.5,
-                borderWidth: 1,
-                boxShadow: 'none',
-                backgroundImage: 'none',
-              },
-            },
-          },
-          MuiPaper: {
-            styleOverrides: {
-              root: {
-                borderRadius: 1.5,
-              },
-            },
-          },
-          MuiButton: {
-            styleOverrides: {
-              root: {
-                borderRadius: 1.25,
-                textTransform: 'none',
-                fontWeight: 600,
-                boxShadow: 'none',
-              },
-            },
-          },
-          MuiChip: {
-            styleOverrides: {
-              root: {
-                borderRadius: 2,
-              },
-            },
-          },
-          MuiOutlinedInput: {
-            styleOverrides: {
-              root: {
-                borderRadius: 1.25,
-              },
-            },
-          },
-          MuiAccordion: {
-            styleOverrides: {
-              root: {
-                borderRadius: 2,
-                '&:before': {
-                  display: 'none',
-                },
-              },
-            },
-          },
-          MuiTab: {
-            styleOverrides: {
-              root: {
-                minHeight: 44,
-              },
-            },
-          },
-        },
-      }),
-    [mode],
-  );
 
   const isNodeActionBusy =
     busyActions.startNode ||
@@ -378,8 +283,8 @@ function App() {
     busyActions.runNetworkPartitionDemo ||
     Boolean(
       networkOperation &&
-        (networkOperation.status === 'started' ||
-          networkOperation.status === 'progress'),
+      (networkOperation.status === 'started' ||
+        networkOperation.status === 'progress'),
     );
 
   const runBusyAction = async (
@@ -664,272 +569,218 @@ function App() {
   };
 
   return (
-    <ThemeProvider theme={theme}>
+    <>
       <CssBaseline />
-      <Box
-        sx={{
-          height: '100dvh',
-          overflow: 'hidden',
-          backgroundColor: 'background.default',
-        }}
-      >
+      <Box sx={{ height: '100dvh', display: 'flex', flexDirection: 'column' }}>
         <AppBar
-          position="sticky"
+          position="static"
           color="inherit"
           elevation={0}
           sx={{ borderBottom: 1, borderColor: 'divider' }}
         >
           <Toolbar sx={{ gap: 2, minHeight: 64 }}>
             <Stack spacing={0.25} sx={{ flexGrow: 1 }}>
-              <Typography variant="h5" sx={{ fontWeight: 700 }}>
+              <Typography variant="h6" sx={{ fontWeight: 700 }}>
                 go-blockchain GUI
               </Typography>
             </Stack>
-            <IconButton
-              color="inherit"
-              onClick={() =>
-                setMode((prev) => (prev === 'dark' ? 'light' : 'dark'))
-              }
-            >
-              {mode === 'dark' ? <LightModeIcon /> : <DarkModeIcon />}
-            </IconButton>
-            <Button
-              startIcon={<RefreshIcon />}
-              variant="contained"
-              onClick={() => void refresh()}
-            >
+            <Button startIcon={<RefreshIcon />} variant="outlined" onClick={() => void refresh()}>
               刷新
             </Button>
           </Toolbar>
         </AppBar>
 
-        <Container
-          maxWidth={false}
+        <Box
           sx={{
-            height: 'calc(100dvh - 64px)',
-            py: 2,
-            px: 2.5,
-            maxWidth: 'none',
+            flex: 1,
+            display: 'flex',
+            overflow: 'hidden',
           }}
         >
-          <Stack spacing={2} sx={{ height: '100%' }}>
-            {message ? <Alert severity="success">{message}</Alert> : null}
-            {error ? <Alert severity="error">{error}</Alert> : null}
-
-            <Box
-              sx={{
-                flex: 1,
-                minHeight: 0,
-                display: 'grid',
-                gap: 2,
-                alignItems: 'start',
-                gridTemplateColumns: '228px minmax(0, 1fr)',
-              }}
-            >
-              <Paper
-                variant="outlined"
+          {/* 左侧导航栏 */}
+          <Box
+            component="nav"
+            sx={{
+              width: 260,
+              flexShrink: 0,
+              borderRight: 1,
+              borderColor: 'divider',
+              bgcolor: 'background.paper',
+              display: 'flex',
+              flexDirection: 'column',
+            }}
+          >
+            <Box sx={{ p: 2, pb: 1 }}>
+              <Typography
+                variant="overline"
+                color="text.secondary"
+                sx={{ ml: 1, fontWeight: 700, letterSpacing: 1 }}
+              >
+                主菜单
+              </Typography>
+            </Box>
+            <Box sx={{ flex: 1, overflowY: 'auto' }}>
+              <Tabs
+                orientation="vertical"
+                value={tab}
+                onChange={(_, value) => setTab(value)}
+                variant="scrollable"
                 sx={{
-                  p: 1,
-                  height: '100%',
-                  overflow: 'hidden',
-                  borderColor: 'divider',
-                  backgroundImage: 'none',
+                  minHeight: 0,
+                  '& .MuiTabs-indicator': {
+                    display: 'none',
+                  },
+                  '& .MuiTabs-flexContainer': {
+                    alignItems: 'stretch',
+                    px: 1,
+                  },
+                  '& .MuiTab-root': {
+                    alignItems: 'flex-start',
+                    justifyContent: 'flex-start',
+                    textAlign: 'left',
+                    minHeight: 44,
+                    px: 2,
+                    py: 1.5,
+                    borderRadius: 1,
+                    textTransform: 'none',
+                    fontWeight: 500,
+                  },
+                  '& .MuiTab-root.Mui-selected': {
+                    fontWeight: 700,
+                    bgcolor: 'action.selected',
+                  },
                 }}
               >
-                <Stack spacing={1.5}>
-                  <Box sx={{ px: 1, pt: 0.5, pb: 0.5 }}>
-                    <Typography
-                      variant="overline"
-                      color="text.secondary"
-                      sx={{ letterSpacing: 0.6 }}
-                    >
-                      导航
-                    </Typography>
-                    <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                      go-blockchain
-                    </Typography>
-                  </Box>
-                  <Divider />
-                  <Tabs
-                    orientation="vertical"
-                    value={tab}
-                    onChange={(_, value) => setTab(value)}
-                    variant="scrollable"
-                    sx={{
-                      minHeight: 0,
-                      '& .MuiTabs-indicator': {
-                        display: 'none',
-                      },
-                      '& .MuiTabs-flexContainer': {
-                        alignItems: 'stretch',
-                      },
-                      '& .MuiTab-root': {
-                        alignItems: 'flex-start',
-                        justifyContent: 'flex-start',
-                        textAlign: 'left',
-                        minHeight: 44,
-                        px: 1.25,
-                        py: 0.75,
-                        borderRadius: 1,
-                        color: 'text.secondary',
-                      },
-                      '& .MuiTab-root.Mui-selected': {
-                        color: 'text.primary',
-                        bgcolor: 'action.selected',
-                      },
-                    }}
-                  >
-                    {navItems.map((item) => (
-                      <Tab
-                        key={item.label}
-                        icon={item.icon}
-                        iconPosition="start"
-                        label={item.label}
-                      />
-                    ))}
-                  </Tabs>
-                </Stack>
-              </Paper>
-
-              <Stack spacing={0} sx={{ minWidth: 0, minHeight: 0 }}>
-                <Box
-                  sx={{
-                    flex: 1,
-                    minHeight: 0,
-                    overflow: 'auto',
-                    pr: 0.5,
-                  }}
-                >
-                <Box
-                  sx={{
-                    display: tab === 0 ? 'block' : 'none',
-                  }}
-                >
-                  <Box>
-                    <DashboardPage
-                      dashboard={dashboard}
-                      latestBlock={latestBlock}
-                      wallets={wallets}
-                      mempool={mempool}
-                      multiSigOutputs={multiSigOutputs}
-                      nodes={nodes}
-                      chainInitAddress={chainInitAddress}
-                      setChainInitAddress={setChainInitAddress}
-                      onInitializeBlockchain={handleInitializeBlockchain}
-                      isInitializingBlockchain={isInitializingBlockchain}
-                    />
-                  </Box>
-                </Box>
-
-                <Box
-                  sx={{
-                    display: tab === 1 ? 'block' : 'none',
-                  }}
-                >
-                  <Box>
-                    <WalletsPage
-                      wallets={wallets}
-                      onCreateWallet={handleCreateWallet}
-                    />
-                  </Box>
-                </Box>
-
-                <Box
-                  sx={{
-                    display: tab === 2 ? 'block' : 'none',
-                  }}
-                >
-                  <Box>
-                    <BlocksPage blocks={blocks} />
-                  </Box>
-                </Box>
-
-                <Box
-                  sx={{
-                    display: tab === 3 ? 'block' : 'none',
-                  }}
-                >
-                  <Box>
-                    <TransactionsPage
-                      txForm={txForm}
-                      setTxForm={setTxForm}
-                      spendMultiSigForm={spendMultiSigForm}
-                      setSpendMultiSigForm={setSpendMultiSigForm}
-                      multiSigOutputs={multiSigOutputs}
-                      minerAddress={minerAddress}
-                      setMinerAddress={setMinerAddress}
-                      mempool={mempool}
-                      onQueueTransaction={handleQueueTransaction}
-                      onSpendMultiSig={handleSpendMultiSig}
-                      onMine={handleMine}
-                    />
-                  </Box>
-                </Box>
-
-                <Box
-                  sx={{
-                    display: tab === 4 ? 'block' : 'none',
-                  }}
-                >
-                  <Box>
-                    <NetworkPage
-                      nodes={nodes}
-                      wallets={wallets}
-                      networkDemo={networkDemo}
-                      networkReorgDemo={networkReorgDemo}
-                      networkPartitionDemo={networkPartitionDemo}
-                      lastReorg={dashboard?.lastReorg ?? null}
-                      recentEvents={dashboard?.recentEvents ?? []}
-                      nodeForm={nodeForm}
-                      setNodeForm={setNodeForm}
-                      connectForm={connectForm}
-                      setConnectForm={setConnectForm}
-                      nodeControlForm={nodeControlForm}
-                      setNodeControlForm={setNodeControlForm}
-                      onStartNode={handleStartNode}
-                      onStopNode={handleStopNode}
-                      onConnectNode={handleConnectNode}
-                      onInitializeNodeBlockchain={
-                        handleInitializeNodeBlockchain
-                      }
-                      onSubmitNodeTransaction={handleSubmitNodeTransaction}
-                      onMineNode={handleMineNode}
-                      onRunNetworkQuickDemo={handleRunNetworkQuickDemo}
-                      onRunNetworkReorgDemo={handleRunNetworkReorgDemo}
-                      onRunNetworkPartitionDemo={handleRunNetworkPartitionDemo}
-                      operationProgress={networkOperation}
-                      isDemoBusy={isDemoBusy}
-                      busyActions={busyActions}
-                      isNodeActionBusy={isNodeActionBusy}
-                    />
-                  </Box>
-                </Box>
-
-                <Box
-                  sx={{
-                    display: tab === 5 ? 'block' : 'none',
-                  }}
-                >
-                  <Box>
-                    <ConsolePage
-                      command={command}
-                      setCommand={setCommand}
-                      history={history}
-                      wallets={wallets}
-                      nodes={nodes}
-                      multiSigOutputs={multiSigOutputs}
-                      onExecute={handleExecuteCommand}
-                      onRunCommand={handleRunCommand}
-                    />
-                  </Box>
-                </Box>
-                </Box>
-              </Stack>
+                {navItems.map((item) => (
+                  <Tab
+                    key={item.label}
+                    icon={item.icon}
+                    iconPosition="start"
+                    label={item.label}
+                    sx={{ gap: 1.5 }}
+                  />
+                ))}
+              </Tabs>
             </Box>
-          </Stack>
-        </Container>
+            <Box sx={{ p: 2, borderTop: 1, borderColor: 'divider' }}>
+              {message || error ? (
+                <Alert
+                  severity={error ? 'error' : 'success'}
+                  sx={{ borderRadius: 2, '& .MuiAlert-message': { wordBreak: 'break-all' } }}
+                  onClose={() => { setMessage(''); setError(''); }}
+                >
+                  {error || message}
+                </Alert>
+              ) : (
+                <Typography variant="caption" color="text.secondary">
+                  节点状态正常
+                </Typography>
+              )}
+            </Box>
+          </Box>
+
+          {/* 右侧主内容区 */}
+          <Box
+            component="main"
+            sx={{
+              flex: 1,
+              overflowY: 'auto',
+              p: 3,
+            }}
+          >
+            <Box sx={{ maxWidth: 1400, mx: 'auto' }}>
+              <Box sx={{ display: tab === 0 ? 'block' : 'none' }}>
+                <DashboardPage
+                  dashboard={dashboard}
+                  latestBlock={latestBlock}
+                  wallets={wallets}
+                  mempool={mempool}
+                  multiSigOutputs={multiSigOutputs}
+                  nodes={nodes}
+                  chainInitAddress={chainInitAddress}
+                  setChainInitAddress={setChainInitAddress}
+                  onInitializeBlockchain={handleInitializeBlockchain}
+                  isInitializingBlockchain={isInitializingBlockchain}
+                />
+              </Box>
+
+              <Box sx={{ display: tab === 1 ? 'block' : 'none' }}>
+                <WalletsPage
+                  wallets={wallets}
+                  onCreateWallet={handleCreateWallet}
+                />
+              </Box>
+
+              <Box sx={{ display: tab === 2 ? 'block' : 'none' }}>
+                <BlocksPage blocks={blocks} />
+              </Box>
+
+              <Box sx={{ display: tab === 3 ? 'block' : 'none' }}>
+                <TransactionsPage
+                  txForm={txForm}
+                  setTxForm={setTxForm}
+                  spendMultiSigForm={spendMultiSigForm}
+                  setSpendMultiSigForm={setSpendMultiSigForm}
+                  multiSigOutputs={multiSigOutputs}
+                  minerAddress={minerAddress}
+                  setMinerAddress={setMinerAddress}
+                  mempool={mempool}
+                  onQueueTransaction={handleQueueTransaction}
+                  onSpendMultiSig={handleSpendMultiSig}
+                  onMine={handleMine}
+                />
+              </Box>
+
+              <Box sx={{ display: tab === 4 ? 'block' : 'none' }}>
+                <NetworkPage
+                  nodes={nodes}
+                  wallets={wallets}
+                  networkDemo={networkDemo}
+                  networkReorgDemo={networkReorgDemo}
+                  networkPartitionDemo={networkPartitionDemo}
+                  lastReorg={dashboard?.lastReorg ?? null}
+                  recentEvents={dashboard?.recentEvents ?? []}
+                  nodeForm={nodeForm}
+                  setNodeForm={setNodeForm}
+                  connectForm={connectForm}
+                  setConnectForm={setConnectForm}
+                  nodeControlForm={nodeControlForm}
+                  setNodeControlForm={setNodeControlForm}
+                  onStartNode={handleStartNode}
+                  onStopNode={handleStopNode}
+                  onConnectNode={handleConnectNode}
+                  onInitializeNodeBlockchain={
+                    handleInitializeNodeBlockchain
+                  }
+                  onSubmitNodeTransaction={handleSubmitNodeTransaction}
+                  onMineNode={handleMineNode}
+                  onRunNetworkQuickDemo={handleRunNetworkQuickDemo}
+                  onRunNetworkReorgDemo={handleRunNetworkReorgDemo}
+                  onRunNetworkPartitionDemo={handleRunNetworkPartitionDemo}
+                  operationProgress={networkOperation}
+                  isDemoBusy={isDemoBusy}
+                  busyActions={busyActions}
+                  isNodeActionBusy={isNodeActionBusy}
+                />
+              </Box>
+
+              <Box sx={{ display: tab === 5 ? 'block' : 'none' }}>
+                <ConsolePage
+                  command={command}
+                  setCommand={setCommand}
+                  history={history}
+                  wallets={wallets}
+                  nodes={nodes}
+                  multiSigOutputs={multiSigOutputs}
+                  onExecute={handleExecuteCommand}
+                  onRunCommand={handleRunCommand}
+                />
+              </Box>
+            </Box>
+          </Box>
+        </Box>
       </Box>
-    </ThemeProvider>
+    </>
   );
 }
 

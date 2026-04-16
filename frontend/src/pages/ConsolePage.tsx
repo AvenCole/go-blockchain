@@ -144,9 +144,9 @@ function ConsolePage({
           display: 'flex',
           flexDirection: 'column',
           overflow: 'hidden',
-          bgcolor: '#0b1220',
-          color: '#d7e2f0',
-          borderColor: '#1f2937',
+          bgcolor: '#111111',
+          color: '#e8e8e8',
+          borderColor: '#2b2b2b',
         }}
       >
         <Stack
@@ -156,7 +156,7 @@ function ConsolePage({
             px: 2,
             py: 1.5,
             alignItems: 'center',
-            borderBottom: '1px solid #1f2937',
+            borderBottom: '1px solid #2b2b2b',
           }}
         >
           <Typography variant="h6" sx={{ minWidth: 96 }}>
@@ -179,11 +179,11 @@ function ConsolePage({
             }}
             sx={{
               '& .MuiOutlinedInput-root': {
-                bgcolor: '#111827',
+                bgcolor: '#1b1b1b',
                 borderRadius: 1,
               },
               '& .MuiOutlinedInput-notchedOutline': {
-                borderColor: '#334155',
+                borderColor: '#3a3a3a',
               },
             }}
           />
@@ -203,14 +203,14 @@ function ConsolePage({
           }}
         >
           {history.length === 0 ? (
-            <Typography sx={{ color: '#7dd3fc', fontFamily: 'Consolas, monospace' }}>
+            <Typography sx={{ color: '#d4d4d4', fontFamily: 'Consolas, monospace' }}>
               {'>'} 等待输入
             </Typography>
           ) : (
             <Stack spacing={2}>
               {history.map((item, index) => (
                 <Stack key={`${item.command}-${index}`} spacing={0.9}>
-                  <Typography sx={{ color: '#7dd3fc', fontFamily: 'Consolas, monospace' }}>
+                  <Typography sx={{ color: '#d4d4d4', fontFamily: 'Consolas, monospace' }}>
                     {'>'} {item.command}
                   </Typography>
                   {item.stdout ? (
@@ -227,7 +227,7 @@ function ConsolePage({
                     <Typography
                       sx={{
                         whiteSpace: 'pre-wrap',
-                        color: '#fda4af',
+                        color: '#ff8a8a',
                         fontFamily: 'Consolas, monospace',
                       }}
                     >
@@ -236,7 +236,7 @@ function ConsolePage({
                   ) : null}
                   <Typography
                     variant="caption"
-                    sx={{ color: '#94a3b8', fontFamily: 'Consolas, monospace' }}
+                    sx={{ color: '#9a9a9a', fontFamily: 'Consolas, monospace' }}
                   >
                     exitCode={item.exitCode}
                   </Typography>
