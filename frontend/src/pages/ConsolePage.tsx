@@ -60,15 +60,18 @@ function ConsolePage({
   return (
     <Box
       sx={{
+        height: '100%',
+        minHeight: 0,
+        overflow: 'hidden',
         display: 'grid',
         gap: 2,
         gridTemplateColumns: '280px minmax(0, 1fr)',
-        minHeight: 760,
       }}
     >
       <Paper
         variant="outlined"
         sx={{
+          height: '100%',
           overflow: 'hidden',
           display: 'flex',
           flexDirection: 'column',
@@ -140,6 +143,7 @@ function ConsolePage({
       <Paper
         variant="outlined"
         sx={{
+          height: '100%',
           minHeight: 0,
           display: 'flex',
           flexDirection: 'column',
